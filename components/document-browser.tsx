@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -67,6 +68,13 @@ const MORE_METRICS = [
   { value: "status",                      label: "Status" },
 ] as const
 
+const MOCK_VERSIONS = [
+  { id: "v3.2", label: "v3.2  ·  2 days ago" },
+  { id: "v3.1", label: "v3.1  ·  1 week ago" },
+  { id: "v3.0", label: "v3.0  ·  3 weeks ago" },
+  { id: "v2.9", label: "v2.9  ·  1 month ago" },
+]
+
 function getBandLabel(doc: Document, field: string): string {
   switch (field) {
     case "status":
@@ -115,6 +123,10 @@ interface DocumentBrowserProps {
   onUpdateDocument?: (docId: string, updates: Partial<Document>) => void
   onBulkDownload?: (docIds: string[]) => void
   onBulkDelete?: (docIds: string[]) => void
+  currentVersion?: string
+  versions?: { id: string; label: string }[]
+  comparisonDocuments?: Document[]
+  onDeltaVersionChange?: (versionId: string | null) => void
   extractedFields?: ExtractedField[]
 }
 
@@ -125,6 +137,10 @@ export function DocumentBrowser({
   onResetDocument,
   onBulkDownload,
   onBulkDelete,
+  currentVersion,
+  versions,
+  comparisonDocuments,
+  onDeltaVersionChange,
   extractedFields = [],
 }: DocumentBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -171,6 +187,13 @@ export function DocumentBrowser({
 
   // Bulk delete confirmation
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  // Group by bands when sort is active
+  const [groupByEnabled, setGroupByEnabled] = useState(true)
+
+  // Delta comparison
+  const [deltaEnabled, setDeltaEnabled] = useState(false)
+  const [deltaVersionId, setDeltaVersionId] = useState("")
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -244,7 +267,7 @@ export function DocumentBrowser({
 
   // Build flat list with optional band-header rows when a sort field is active
   const docItems = useMemo(() => {
-    if (!sortField) return filteredDocuments.map((doc) => ({ type: "doc" as const, doc }))
+    if (!sortField || !groupByEnabled) return filteredDocuments.map((doc) => ({ type: "doc" as const, doc }))
     const result: Array<{ type: "band"; label: string } | { type: "doc"; doc: Document }> = []
     let currentBand = ""
     for (const doc of filteredDocuments) {
@@ -256,7 +279,7 @@ export function DocumentBrowser({
       result.push({ type: "doc", doc })
     }
     return result
-  }, [filteredDocuments, sortField])
+  }, [filteredDocuments, sortField, groupByEnabled])
 
   const activeFilterCount = [filterStatuses.size > 0, filterTags.size > 0 || filterTagEmpty].filter(Boolean).length
   const isSortActive = sortField !== ""
@@ -320,6 +343,40 @@ export function DocumentBrowser({
       default:
         return null
     }
+  }
+
+  // Returns the raw numeric value for a metric field (used for delta computation)
+  const getRawMetricValue = (doc: Document, field: string): number | null => {
+    if (sortScope !== "all-fields" && isMetricSort(field)) {
+      return getFieldHash(sortScope, doc.id)
+    }
+    switch (field) {
+      case "error-rate":
+      case "doc-error-rate":
+      case "doc-error-rate-excl-missing":
+        return doc.errorRate ?? null
+      case "total-error":
+      case "total-errors":
+        return doc.errorRate != null ? Math.round((doc.errorRate / 100) * doc.pages * 30) : null
+      case "f1-score":
+      case "precision":
+      case "recall":
+        return doc.errorRate != null ? Math.max(0, Math.round(100 - doc.errorRate)) : null
+      default:
+        return null
+    }
+  }
+
+  // For these metrics, a higher value means improvement
+  const isHigherBetter = (field: string) =>
+    ["f1-score", "precision", "recall", "correct-values", "correct-missing",
+      "total-annotations", "annotated-values", "annotated-as-missing"].includes(field)
+
+  // Deterministic mock delta when no comparisonDocuments are provided (-10 to +10 range)
+  const getMockDelta = (docId: string, versionId: string, field: string): number => {
+    let h = 0
+    for (const c of versionId + ":" + docId + ":" + field) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0
+    return ((Math.abs(h) % 21) - 10)
   }
 
   const SORT_FIELD_LABELS: Record<string, string> = {
@@ -591,6 +648,51 @@ export function DocumentBrowser({
                       </span>
                     </button>
                   ))}
+
+                {/* Group by toggle */}
+                <div className="py-2">
+                  <div className="bg-[#cfd8dd] h-px" />
+                </div>
+                <div className="px-4 pb-1 flex items-center justify-between h-10">
+                  <span className="text-[14px] leading-5 text-[#526069]">Group by</span>
+                  <Switch checked={groupByEnabled} onCheckedChange={setGroupByEnabled} />
+                </div>
+
+                {/* Compare to version — only visible when a metric sort is active */}
+                {isMetricSort(sortField) && (
+                  <>
+                    <div className="py-2">
+                      <div className="bg-[#cfd8dd] h-px" />
+                    </div>
+                    <div className="px-4 pb-3">
+                      <div className="flex items-center justify-between h-8">
+                        <span className="text-[12px] font-semibold text-[#526069] uppercase tracking-wider">Compare to version</span>
+                        <Switch
+                          checked={deltaEnabled}
+                          onCheckedChange={(checked) => {
+                            setDeltaEnabled(checked)
+                            if (!checked) { setDeltaVersionId(""); onDeltaVersionChange?.(null) }
+                          }}
+                        />
+                      </div>
+                      {deltaEnabled && (
+                        <select
+                          value={deltaVersionId}
+                          onChange={(e) => {
+                            setDeltaVersionId(e.target.value)
+                            onDeltaVersionChange?.(e.target.value || null)
+                          }}
+                          className="mt-1 w-full h-8 text-[13px] text-[#273139] bg-[#f4f5f7] border border-[#cfd8dd] rounded-[3px] px-2 focus:outline-none focus:ring-2 focus:ring-[#0067df] cursor-pointer"
+                        >
+                          <option value="">Select version…</option>
+                          {(versions ?? MOCK_VERSIONS).map((v) => (
+                            <option key={v.id} value={v.id}>{v.label}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </>
+                )}
               </PopoverContent>
             </Popover>
 
@@ -782,8 +884,8 @@ export function DocumentBrowser({
         </div>
       </div>
 
-      {/* ── Active chips bar (sort + filters) ── */}
-      {(isSortActive || activeFilterCount > 0) && (
+      {/* ── Active chips bar (sort + filters + delta) ── */}
+      {(isSortActive || activeFilterCount > 0 || (deltaEnabled && deltaVersionId)) && (
         <div className="px-3 py-3 border-b border-[#cfd8dd] flex flex-col gap-2">
 
           {/* Sort chip row */}
@@ -951,6 +1053,28 @@ export function DocumentBrowser({
                 <button
                   onClick={() => { setSortField(""); setSortScope("all-fields") }}
                   className="hover:text-[#273139] text-[#526069] transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+            </div>
+          )}
+
+          {/* Delta comparison chip row — icon outside, chip inside, same pattern as sort/filter */}
+          {deltaEnabled && deltaVersionId && isMetricSort(sortField) && (
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-semibold text-[#526069] flex-shrink-0 w-4 text-center leading-4">Δ</span>
+              <div className="flex items-center gap-1.5 bg-[#cfd8dd] rounded-full px-3 py-[2px]">
+                <button
+                  onClick={() => setSortOpen(true)}
+                  className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 whitespace-nowrap hover:text-[#0067df] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
+                >
+                  current{currentVersion ? ` (${currentVersion})` : ""} vs {deltaVersionId}
+                </button>
+                <button
+                  onClick={() => { setDeltaEnabled(false); setDeltaVersionId(""); onDeltaVersionChange?.(null) }}
+                  className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -1174,6 +1298,22 @@ export function DocumentBrowser({
               ? doc.tags.slice(0, 2).join(", ") + (doc.tags.length > 2 ? `, +${doc.tags.length - 2} more` : "")
               : null
           const sortVal = sortField ? getSortValue(doc, sortField) : null
+          const deltaActive = deltaEnabled && !!deltaVersionId && isMetricSort(sortField)
+          const deltaNum = (() => {
+            if (!deltaActive) return null
+            const currentNum = getRawMetricValue(doc, sortField)
+            if (currentNum == null) return null
+            if (comparisonDocuments) {
+              const compDoc = comparisonDocuments.find((d) => d.id === doc.id)
+              if (!compDoc) return null
+              const compNum = getRawMetricValue(compDoc, sortField)
+              return compNum != null ? currentNum - compNum : null
+            }
+            return getMockDelta(doc.id, deltaVersionId, sortField)
+          })()
+          const deltaGood = deltaNum != null
+            ? (isHigherBetter(sortField) ? deltaNum > 0 : deltaNum < 0)
+            : false
 
           return (
             <div
@@ -1275,7 +1415,20 @@ export function DocumentBrowser({
                     )}
                   </div>
                   {sortVal != null && (
-                    <span className="flex-shrink-0 text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums">{sortVal}</span>
+                    <div className="flex-shrink-0 flex items-center gap-1">
+                      <span className="text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums">{sortVal}</span>
+                      {deltaNum != null && (
+                        <span className={cn(
+                          "text-[10px] font-semibold tabular-nums leading-4",
+                          deltaNum === 0
+                            ? "text-[#526069]"
+                            : deltaGood ? "text-[#038108]" : "text-[#b45309]",
+                        )}>
+                          {deltaNum > 0 ? "▲" : deltaNum < 0 ? "▼" : "–"}
+                          {deltaNum !== 0 ? Math.abs(deltaNum) : ""}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
