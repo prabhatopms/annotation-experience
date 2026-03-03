@@ -4,8 +4,18 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Search,
   FileText,
@@ -17,11 +27,14 @@ import {
   Trash2,
   ArrowUpDown,
   ArrowDown,
+  ChevronDown,
   ChevronRight,
   Type,
   Hash,
   CalendarDays,
   LayoutGrid,
+  Tag,
+  Plus,
 } from "lucide-react"
 import React, { useState, useMemo, useCallback } from "react"
 import type { Document, ExtractedField } from "@/lib/types"
@@ -100,6 +113,8 @@ interface DocumentBrowserProps {
   onDocumentSelect: (id: string) => void
   onResetDocument?: (docId: string) => void
   onUpdateDocument?: (docId: string, updates: Partial<Document>) => void
+  onBulkDownload?: (docIds: string[]) => void
+  onBulkDelete?: (docIds: string[]) => void
   extractedFields?: ExtractedField[]
 }
 
@@ -108,6 +123,8 @@ export function DocumentBrowser({
   selectedDocumentId,
   onDocumentSelect,
   onResetDocument,
+  onBulkDownload,
+  onBulkDelete,
   extractedFields = [],
 }: DocumentBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -138,6 +155,22 @@ export function DocumentBrowser({
 
   const [hoveredDocId, setHoveredDocId] = useState<string | null>(null)
   const [menuOpenDocId, setMenuOpenDocId] = useState<string | null>(null)
+
+  // Multi-select
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set())
+
+  // Per-doc tag editor
+  const [tagEditorDocId, setTagEditorDocId] = useState<string | null>(null)
+  const [tagEditorSearch, setTagEditorSearch] = useState("")
+  const [newTagInput, setNewTagInput] = useState("")
+
+  // Bulk tag editor
+  const [bulkTagOpen, setBulkTagOpen] = useState(false)
+  const [bulkTagSearch, setBulkTagSearch] = useState("")
+  const [bulkNewTagInput, setBulkNewTagInput] = useState("")
+
+  // Bulk delete confirmation
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -341,6 +374,73 @@ export function DocumentBrowser({
       else next.add(tag)
       return next
     })
+  }
+
+  // ── Multi-select ──────────────────────────────────────────────────────────
+
+  const toggleDocSelection = (docId: string) => {
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(docId)) next.delete(docId)
+      else next.add(docId)
+      return next
+    })
+  }
+
+  // ── Per-doc tag management ────────────────────────────────────────────────
+
+  const toggleDocTag = (docId: string, tag: string) => {
+    const doc = documents.find((d) => d.id === docId)
+    if (!doc) return
+    const tags = doc.tags ?? []
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]
+    onUpdateDocument?.(docId, { tags: next })
+  }
+
+  const commitNewTag = (docId: string, value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    const doc = documents.find((d) => d.id === docId)
+    if (!doc) return
+    const tags = doc.tags ?? []
+    if (!tags.includes(trimmed)) onUpdateDocument?.(docId, { tags: [...tags, trimmed] })
+    setNewTagInput("")
+  }
+
+  // ── Bulk tag management ───────────────────────────────────────────────────
+
+  const getBulkTagState = (tag: string): "all" | "some" | "none" => {
+    const selected = Array.from(selectedDocIds)
+      .map((id) => documents.find((d) => d.id === id))
+      .filter((d): d is Document => !!d)
+    if (!selected.length) return "none"
+    const n = selected.filter((d) => d.tags?.includes(tag)).length
+    if (n === 0) return "none"
+    if (n === selected.length) return "all"
+    return "some"
+  }
+
+  const toggleBulkTag = (tag: string) => {
+    const shouldAdd = getBulkTagState(tag) !== "all"
+    for (const docId of selectedDocIds) {
+      const doc = documents.find((d) => d.id === docId)
+      if (!doc) continue
+      const tags = doc.tags ?? []
+      if (shouldAdd && !tags.includes(tag)) onUpdateDocument?.(docId, { tags: [...tags, tag] })
+      if (!shouldAdd && tags.includes(tag)) onUpdateDocument?.(docId, { tags: tags.filter((t) => t !== tag) })
+    }
+  }
+
+  const commitBulkNewTag = (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    for (const docId of selectedDocIds) {
+      const doc = documents.find((d) => d.id === docId)
+      if (!doc) continue
+      const tags = doc.tags ?? []
+      if (!tags.includes(trimmed)) onUpdateDocument?.(docId, { tags: [...tags, trimmed] })
+    }
+    setBulkNewTagInput("")
   }
 
   return (
@@ -913,6 +1013,142 @@ export function DocumentBrowser({
 
       {/* Document List */}
       <div className="flex-1 overflow-y-auto">
+
+        {/* ── Bulk action bar ── */}
+        {selectedDocIds.size > 0 && (
+          <div className="sticky top-0 z-30 flex items-center gap-2 px-3 h-10 bg-[#273139] border-b border-[#1a272e]">
+            <button
+              onClick={() => setSelectedDocIds(new Set())}
+              className="flex-shrink-0 text-white/50 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded-sm"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-[12px] font-semibold text-white flex-1 leading-4">
+              {selectedDocIds.size} selected
+            </span>
+            {/* Bulk actions dropdown + tag editor popover anchored to the trigger */}
+            <Popover
+              open={bulkTagOpen}
+              onOpenChange={(open) => {
+                setBulkTagOpen(open)
+                if (!open) { setBulkTagSearch(""); setBulkNewTagInput("") }
+              }}
+            >
+              <PopoverAnchor asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1 text-[12px] font-semibold text-white/70 hover:text-white transition-colors px-2 py-1 rounded-[3px] hover:bg-white/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30">
+                      Bulk actions
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem
+                      onClick={() => setBulkTagOpen(true)}
+                      className="cursor-pointer text-xs"
+                    >
+                      <Tag className="h-3.5 w-3.5 mr-2" /> Edit tags
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onBulkDownload?.(Array.from(selectedDocIds))}
+                      className="cursor-pointer text-xs"
+                    >
+                      <Download className="h-3.5 w-3.5 mr-2" /> Download
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setDeleteConfirmOpen(true)}
+                      className="cursor-pointer text-xs text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </PopoverAnchor>
+              <PopoverContent
+                side="top"
+                align="end"
+                sideOffset={8}
+                className="w-[260px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+              >
+                {/* Header */}
+                <div className="px-4 h-8 flex items-center justify-between">
+                  <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Tags</span>
+                  <span className="text-[10px] font-semibold text-[#526069] bg-[#f4f5f7] rounded-full px-2 py-0.5">
+                    {selectedDocIds.size} docs
+                  </span>
+                </div>
+                {/* Search */}
+                <div className="px-4 pb-2">
+                  <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
+                    <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                    <input
+                      value={bulkTagSearch}
+                      onChange={(e) => setBulkTagSearch(e.target.value)}
+                      placeholder="Search tags…"
+                      className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                {/* Tag list with tri-state checkboxes */}
+                <div className="max-h-[220px] overflow-y-auto">
+                  {allTags
+                    .filter((t) => !bulkTagSearch || t.toLowerCase().includes(bulkTagSearch.toLowerCase()))
+                    .map((tag) => {
+                      const state = getBulkTagState(tag)
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => toggleBulkTag(tag)}
+                          className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                        >
+                          <Checkbox
+                            checked={state === "all" ? true : state === "some" ? "indeterminate" : false}
+                            className="h-4 w-4 pointer-events-none rounded-[2px]"
+                          />
+                          <span className="text-[14px] leading-5 text-[#526069] flex-1 truncate">{tag}</span>
+                          {state === "some" && (
+                            <span className="text-[10px] font-semibold text-[#526069] bg-[#f4f5f7] rounded-full px-1.5 py-0.5 flex-shrink-0">
+                              partial
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })
+                  }
+                  {allTags.filter((t) => !bulkTagSearch || t.toLowerCase().includes(bulkTagSearch.toLowerCase())).length === 0 && (
+                    <p className="px-4 py-3 text-[13px] text-[#526069]">
+                      {bulkTagSearch ? `No tags match "${bulkTagSearch}"` : "No tags yet"}
+                    </p>
+                  )}
+                </div>
+                {/* New tag input */}
+                <div className="border-t border-[#cfd8dd] px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center border border-[#526069] rounded-[3px] h-8 px-3 bg-white">
+                      <input
+                        value={bulkNewTagInput}
+                        onChange={(e) => setBulkNewTagInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitBulkNewTag(bulkNewTagInput) } }}
+                        placeholder="New tag…"
+                        className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                      />
+                    </div>
+                    <button
+                      onClick={() => commitBulkNewTag(bulkNewTagInput)}
+                      disabled={!bulkNewTagInput.trim()}
+                      className="h-8 w-8 flex items-center justify-center rounded-[3px] bg-[#0067df] text-white hover:bg-[#0057c7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-offset-1"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
         {docItems.map((item, idx) => {
           if (item.type === "band") {
             return (
@@ -927,14 +1163,17 @@ export function DocumentBrowser({
 
           const doc = item.doc
           const isSelected = selectedDocumentId === doc.id
+          const isDocChecked = selectedDocIds.has(doc.id)
           const isHovered = hoveredDocId === doc.id
           const isMenuOpen = menuOpenDocId === doc.id
           const showActions = isHovered || isMenuOpen
+          const showCheckbox = selectedDocIds.size > 0 || isHovered || isDocChecked
           const statusInfo = getStatusInfo(doc.status)
           const tagsText =
             doc.tags && doc.tags.length > 0
               ? doc.tags.slice(0, 2).join(", ") + (doc.tags.length > 2 ? `, +${doc.tags.length - 2} more` : "")
               : null
+          const sortVal = sortField ? getSortValue(doc, sortField) : null
 
           return (
             <div
@@ -943,19 +1182,42 @@ export function DocumentBrowser({
               onMouseEnter={() => setHoveredDocId(doc.id)}
               onMouseLeave={() => { if (!isMenuOpen) setHoveredDocId(null) }}
             >
-              <button
+              {/* Main row — div[role=button] avoids nested-button invalidity */}
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => onDocumentSelect(doc.id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDocumentSelect(doc.id) } }}
                 className={cn(
-                  "w-full text-left pl-4 pr-8 py-2.5 border-b border-border/50 border-l-4 transition-colors",
+                  "w-full text-left pl-4 pr-8 py-2.5 border-b border-border/50 border-l-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
                   isSelected
                     ? "border-l-[#0067df] bg-[#e9f1fa] hover:bg-[#dde8f5]"
                     : "border-l-transparent hover:bg-accent",
                 )}
               >
-                {/* Row 1: File icon + name + status badge */}
+                {/* Row 1: icon→checkbox + name + status */}
                 <div className="flex items-center gap-1.5">
-                  <div className="flex-shrink-0 flex items-center justify-center w-5 h-5">
-                    <FileText className="h-4 w-4 text-[#526069]" />
+
+                  {/* Icon ↔ Checkbox transition */}
+                  <div
+                    onClick={(e) => { e.stopPropagation(); toggleDocSelection(doc.id) }}
+                    className="flex-shrink-0 relative w-5 h-5 flex items-center justify-center cursor-pointer"
+                  >
+                    <span className={cn(
+                      "absolute inset-0 flex items-center justify-center transition-opacity duration-100",
+                      showCheckbox ? "opacity-0" : "opacity-100",
+                    )}>
+                      <FileText className="h-4 w-4 text-[#526069]" />
+                    </span>
+                    <span className={cn(
+                      "absolute inset-0 flex items-center justify-center transition-opacity duration-100",
+                      showCheckbox ? "opacity-100" : "opacity-0",
+                    )}>
+                      <Checkbox
+                        checked={isDocChecked}
+                        className="h-4 w-4 rounded-[2px] pointer-events-none"
+                      />
+                    </span>
                   </div>
 
                   <Tooltip delayDuration={400}>
@@ -1003,66 +1265,147 @@ export function DocumentBrowser({
                   </span>
                 </div>
 
-                {/* Row 2: Tags + optional sort value right-aligned */}
-                {(() => {
-                  const sortVal = sortField ? getSortValue(doc, sortField) : null
-                  return (
-                    <div className="mt-1 pl-[26px] flex items-center gap-2">
-                      <div className="flex-1 min-w-0 overflow-hidden">
-                        {tagsText ? (
-                          <span className="text-[11px] text-[#526069] truncate block">{tagsText}</span>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">{doc.pages} {doc.pages === 1 ? "page" : "pages"}</span>
-                        )}
-                      </div>
-                      {sortVal != null && (
-                        <span className="flex-shrink-0 text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums">{sortVal}</span>
-                      )}
-                    </div>
-                  )
-                })()}
-              </button>
+                {/* Row 2: tags / pages + sort value */}
+                <div className="mt-1 pl-[26px] flex items-center gap-2">
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    {tagsText ? (
+                      <span className="text-[11px] text-[#526069] truncate block">{tagsText}</span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">{doc.pages} {doc.pages === 1 ? "page" : "pages"}</span>
+                    )}
+                  </div>
+                  {sortVal != null && (
+                    <span className="flex-shrink-0 text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums">{sortVal}</span>
+                  )}
+                </div>
+              </div>
 
-              {/* Three-dot menu — floats outside the row's right boundary */}
+              {/* Three-dot menu + tag editor (anchored here, triggered from menu item) */}
               <div
                 className={cn(
                   "absolute right-2 top-1/2 -translate-y-1/2 z-20 transition-opacity",
-                  showActions ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+                  showActions || tagEditorDocId === doc.id
+                    ? "opacity-100 pointer-events-auto"
+                    : "opacity-0 pointer-events-none",
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
-                <DropdownMenu
-                  open={isMenuOpen}
+                <Popover
+                  open={tagEditorDocId === doc.id}
                   onOpenChange={(open) => {
-                    setMenuOpenDocId(open ? doc.id : null)
-                    if (!open) setHoveredDocId(null)
+                    setTagEditorDocId(open ? doc.id : null)
+                    if (!open) { setTagEditorSearch(""); setNewTagInput("") }
                   }}
                 >
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 rounded-[3px] hover:bg-[#526069]/10"
+                  <PopoverAnchor asChild>
+                    <DropdownMenu
+                      open={isMenuOpen}
+                      onOpenChange={(open) => {
+                        setMenuOpenDocId(open ? doc.id : null)
+                        if (!open) setHoveredDocId(null)
+                      }}
                     >
-                      <MoreHorizontal className="h-3 w-3 text-[#526069]" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
-                    <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs">
-                      <Download className="h-3.5 w-3.5 mr-2" />
-                      Download
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => onResetDocument?.(doc.id)} className="cursor-pointer text-xs">
-                      <RotateCcw className="h-3.5 w-3.5 mr-2" />
-                      Reset extractions
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs text-destructive focus:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-5 w-5 rounded-[3px] hover:bg-[#526069]/10">
+                          <MoreHorizontal className="h-3 w-3 text-[#526069]" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs">
+                          <Download className="h-3.5 w-3.5 mr-2" />
+                          Download
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setTagEditorDocId(doc.id)}
+                          className="cursor-pointer text-xs"
+                        >
+                          <Tag className="h-3.5 w-3.5 mr-2" />
+                          Edit tags
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => onResetDocument?.(doc.id)} className="cursor-pointer text-xs">
+                          <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                          Reset extractions
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs text-destructive focus:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </PopoverAnchor>
+
+                  <PopoverContent
+                    side="right"
+                    align="center"
+                    sideOffset={8}
+                    className="w-[260px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                  >
+                    {/* Header */}
+                    <div className="px-4 h-8 flex items-center">
+                      <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Tags</span>
+                    </div>
+                    {/* Search */}
+                    <div className="px-4 pb-2">
+                      <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
+                        <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                        <input
+                          value={tagEditorSearch}
+                          onChange={(e) => setTagEditorSearch(e.target.value)}
+                          placeholder="Search tags…"
+                          className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    {/* Existing tags */}
+                    <div className="max-h-[200px] overflow-y-auto">
+                      {allTags
+                        .filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase()))
+                        .map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => toggleDocTag(doc.id, tag)}
+                            className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                          >
+                            <Checkbox
+                              checked={doc.tags?.includes(tag) ?? false}
+                              className="h-4 w-4 pointer-events-none rounded-[2px]"
+                            />
+                            <span className="text-[14px] leading-5 text-[#526069] truncate">{tag}</span>
+                          </button>
+                        ))
+                      }
+                      {allTags.filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase())).length === 0 && (
+                        <p className="px-4 py-3 text-[13px] text-[#526069]">
+                          {tagEditorSearch ? `No tags match "${tagEditorSearch}"` : "No tags yet"}
+                        </p>
+                      )}
+                    </div>
+                    {/* New tag input */}
+                    <div className="border-t border-[#cfd8dd] px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center border border-[#526069] rounded-[3px] h-8 px-3 bg-white">
+                          <input
+                            value={newTagInput}
+                            onChange={(e) => setNewTagInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNewTag(doc.id, newTagInput) } }}
+                            placeholder="New tag…"
+                            className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                          />
+                        </div>
+                        <button
+                          onClick={() => commitNewTag(doc.id, newTagInput)}
+                          disabled={!newTagInput.trim()}
+                          className="h-8 w-8 flex items-center justify-center rounded-[3px] bg-[#0067df] text-white hover:bg-[#0057c7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-offset-1"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           )
@@ -1085,6 +1428,30 @@ export function DocumentBrowser({
           </div>
         )}
       </div>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedDocIds.size} {selectedDocIds.size === 1 ? "document" : "documents"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The selected {selectedDocIds.size === 1 ? "document" : "documents"} and all associated annotations will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                onBulkDelete?.(Array.from(selectedDocIds))
+                setSelectedDocIds(new Set())
+                setDeleteConfirmOpen(false)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
