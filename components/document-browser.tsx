@@ -36,8 +36,9 @@ import {
   LayoutGrid,
   Tag,
   Plus,
+  Upload,
 } from "lucide-react"
-import React, { useState, useMemo, useCallback } from "react"
+import React, { useState, useMemo, useCallback, useRef } from "react"
 import type { Document, ExtractedField } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import {
@@ -127,6 +128,7 @@ interface DocumentBrowserProps {
   versions?: { id: string; label: string }[]
   comparisonDocuments?: Document[]
   onDeltaVersionChange?: (versionId: string | null) => void
+  onUploadDocuments?: (files: File[]) => void
   extractedFields?: ExtractedField[]
 }
 
@@ -141,6 +143,7 @@ export function DocumentBrowser({
   versions,
   comparisonDocuments,
   onDeltaVersionChange,
+  onUploadDocuments,
   extractedFields = [],
 }: DocumentBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -500,8 +503,71 @@ export function DocumentBrowser({
     setBulkNewTagInput("")
   }
 
+  // ── Upload ──────────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounter = useRef(0)
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length > 0) onUploadDocuments?.(files)
+    e.target.value = ""
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current++
+    if (e.dataTransfer.types.includes("Files")) setIsDragOver(true)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "copy"
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    dragCounter.current--
+    if (dragCounter.current === 0) setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragOver(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) onUploadDocuments?.(files)
+  }
+
   return (
-    <div className="w-64 border-r border-border bg-card flex flex-col">
+    <div
+      className="w-64 border-r border-border bg-card flex flex-col relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag-and-drop overlay */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-[#e9f1fa]/95 border-2 border-dashed border-[#0067df] rounded-sm pointer-events-none">
+          <div className="w-12 h-12 rounded-full bg-[#0067df]/10 flex items-center justify-center">
+            <Upload className="h-5 w-5 text-[#0067df]" />
+          </div>
+          <div className="text-center">
+            <p className="text-[13px] font-semibold text-[#0067df] leading-5">Drop to upload</p>
+            <p className="text-[11px] text-[#526069] leading-4">Files will be added to this project</p>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
       {/* Header */}
       <div className="p-3 border-b border-border">
         <div className="flex items-center justify-between mb-3">
@@ -869,6 +935,17 @@ export function DocumentBrowser({
                 </Popover>
               </PopoverContent>
             </Popover>
+
+            {/* Upload — low-key icon button, reveals on panel hover */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload documents"
+            >
+              <Upload className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
 
