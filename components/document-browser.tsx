@@ -238,13 +238,13 @@ export function DocumentBrowser({
   const getStatusInfo = (status: string) => {
     switch (status) {
       case "new":
-        return { label: "Not started", badgeClassName: "bg-[#f4f5f7] text-[#273139] rounded" }
+        return { label: "Not started", badgeClassName: "bg-[#f4f5f7] text-[#273139] rounded-full" }
       case "in-progress":
         return { label: "In progress", badgeClassName: "bg-[#e9f1fa] text-[#1665b3] rounded-full" }
       case "annotated":
         return { label: "Annotated", badgeClassName: "bg-[#eeffe5] text-[#038108] rounded-full" }
       case "annotated-editing":
-        return { label: "Annotated (editing)", badgeClassName: "bg-amber-500/10 text-amber-700 rounded-full" }
+        return { label: "Annotated (editing)", badgeClassName: "bg-[#fff4e5] text-[#b45309] rounded-full" }
       default:
         return { label: status, badgeClassName: "" }
     }
@@ -398,7 +398,7 @@ export function DocumentBrowser({
                     <button
                       key={f.value}
                       onClick={() => { setSortField(f.value as typeof sortField); setSortSearch(""); setSortScope("all-fields") }}
-                      className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left"
+                      className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                     >
                       {sortField === f.value && (
                         <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />
@@ -414,7 +414,7 @@ export function DocumentBrowser({
                 {!sortSearch ? (
                   <Popover open={moreMetricsOpen} onOpenChange={setMoreMetricsOpen}>
                     <PopoverTrigger asChild>
-                      <button className="w-full relative h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left">
+                      <button className="w-full relative h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset">
                         <span className={cn("text-[14px] leading-5 text-[#526069]", MORE_METRICS.some(m => m.value === sortField) && "font-medium text-[#273139]")}>
                           More metrics
                         </span>
@@ -435,7 +435,7 @@ export function DocumentBrowser({
                           <button
                             key={m.value}
                             onClick={() => { setSortField(m.value); setMoreMetricsOpen(false); setSortOpen(false); setSortScope("all-fields") }}
-                            className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left"
+                            className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                           >
                             {sortField === m.value && <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />}
                             <span className={cn("text-[14px] leading-5 text-[#526069]", sortField === m.value && "font-medium")}>
@@ -454,7 +454,7 @@ export function DocumentBrowser({
                       <button
                         key={m.value}
                         onClick={() => { setSortField(m.value); setSortSearch("") }}
-                        className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left"
+                        className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                       >
                         {sortField === m.value && <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />}
                         <span className={cn("text-[14px] leading-5 text-[#526069]", sortField === m.value && "font-medium")}>
@@ -478,7 +478,7 @@ export function DocumentBrowser({
                     <button
                       key={d.value}
                       onClick={() => { setSortDirection(d.value); setSortSearch("") }}
-                      className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left"
+                      className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                     >
                       {sortDirection === d.value && sortField && (
                         <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />
@@ -524,7 +524,7 @@ export function DocumentBrowser({
                 {/* ── Status row → flyout ── */}
                 <Popover open={statusFlyoutOpen} onOpenChange={setStatusFlyoutOpen}>
                   <PopoverTrigger asChild>
-                    <button className="w-full h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left">
+                    <button className="w-full h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset">
                       <span className={cn("text-[14px] leading-5 text-[#526069]", filterStatuses.size > 0 && "font-medium text-[#273139]")}>
                         Status
                       </span>
@@ -551,7 +551,7 @@ export function DocumentBrowser({
                       <button
                         key={s.value}
                         onClick={() => toggleStatus(s.value)}
-                        className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                       >
                         <Checkbox checked={filterStatuses.has(s.value)} className="h-4 w-4 pointer-events-none rounded-[2px]" />
                         <span className="text-[14px] leading-5 text-[#526069]">{s.label}</span>
@@ -563,7 +563,7 @@ export function DocumentBrowser({
                 {/* ── Tags row → flyout ── */}
                 <Popover open={tagsFlyoutOpen} onOpenChange={(open) => { setTagsFlyoutOpen(open); if (!open) setTagSearch("") }}>
                   <PopoverTrigger asChild>
-                    <button className="w-full h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left">
+                    <button className="w-full h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset">
                       <span className={cn("text-[14px] leading-5 text-[#526069]", (filterTags.size > 0 || filterTagEmpty) && "font-medium text-[#273139]")}>
                         Tags
                       </span>
@@ -588,13 +588,13 @@ export function DocumentBrowser({
                     </div>
 
                     {/* Contains toggle */}
-                    <div className="flex items-center gap-[10px] px-4 py-2">
+                    <div className="flex items-center gap-2.5 px-4 py-2">
                       <span className="text-[11px] font-semibold leading-4 text-[#273139]">Contains</span>
-                      <div className="flex items-center bg-[#ecedee] rounded-[6px] p-[2px]">
+                      <div className="flex items-center bg-[#f4f5f7] rounded-[6px] p-[2px]">
                         <button
                           onClick={() => setTagContainsMode("any")}
                           className={cn(
-                            "px-2 py-1 rounded-[4px] text-[11px] font-semibold leading-4 text-[#273139] transition-all",
+                            "px-2 py-1 rounded-[4px] text-[11px] font-semibold leading-4 text-[#273139] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df]",
                             tagContainsMode === "any"
                               ? "bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.2),0px_1px_1px_0px_rgba(0,0,0,0.14),0px_2px_1px_0px_rgba(0,0,0,0.12)]"
                               : "hover:bg-white/50",
@@ -605,7 +605,7 @@ export function DocumentBrowser({
                         <button
                           onClick={() => setTagContainsMode("all")}
                           className={cn(
-                            "px-2 py-1 rounded-[4px] text-[11px] font-semibold leading-4 text-[#273139] transition-all",
+                            "px-2 py-1 rounded-[4px] text-[11px] font-semibold leading-4 text-[#273139] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df]",
                             tagContainsMode === "all"
                               ? "bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.2),0px_1px_1px_0px_rgba(0,0,0,0.14),0px_2px_1px_0px_rgba(0,0,0,0.12)]"
                               : "hover:bg-white/50",
@@ -633,7 +633,7 @@ export function DocumentBrowser({
                     <div className="max-h-[240px] overflow-y-auto">
                       <button
                         onClick={() => setFilterTagEmpty(!filterTagEmpty)}
-                        className="w-full flex items-center gap-2 px-4 py-[10px] hover:bg-accent transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                       >
                         <Checkbox checked={filterTagEmpty} className="h-4 w-4 pointer-events-none rounded-[2px]" />
                         <span className="text-[14px] leading-5 italic text-[#526069]">Empty (no tag assigned)</span>
@@ -642,17 +642,17 @@ export function DocumentBrowser({
                       {allTags.length > 0 && (
                         <button
                           onClick={toggleSelectAll}
-                          className="w-full flex items-center gap-2 px-4 py-2 hover:bg-accent transition-colors text-left"
+                          className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                         >
                           <Checkbox checked={allTagsSelected} className="h-4 w-4 pointer-events-none rounded-[2px]" />
-                          <span className="text-[14px] leading-5 text-[#526069]">Select all</span>
+                          <span className="text-[14px] font-semibold leading-5 text-[#526069]">Select all</span>
                         </button>
                       )}
                       {visibleTags.map((tag) => (
                         <button
                           key={tag}
                           onClick={() => toggleTag(tag)}
-                          className="w-full flex items-center gap-2 px-4 py-[10px] hover:bg-accent transition-colors text-left"
+                          className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                         >
                           <Checkbox checked={filterTags.has(tag)} className="h-4 w-4 pointer-events-none rounded-[2px]" />
                           <span className="text-[14px] leading-5 text-[#526069]">{tag}</span>
@@ -684,7 +684,7 @@ export function DocumentBrowser({
 
       {/* ── Active chips bar (sort + filters) ── */}
       {(isSortActive || activeFilterCount > 0) && (
-        <div className="px-[18px] py-3 border-b border-[#cfd8dd] flex flex-col gap-2">
+        <div className="px-3 py-3 border-b border-[#cfd8dd] flex flex-col gap-2">
 
           {/* Sort chip row */}
           {isSortActive && (
@@ -702,14 +702,14 @@ export function DocumentBrowser({
                 {/* Sort field label */}
                 <button
                   onClick={() => setSortOpen(true)}
-                  className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 whitespace-nowrap hover:text-[#0067df] transition-colors"
+                  className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 whitespace-nowrap hover:text-[#0067df] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                 >
                   {SORT_FIELD_LABELS[sortField] ?? sortField}
                 </button>
 
                 {/* Scope label — only shown for metric sorts */}
                 {isMetricSort(sortField) && (
-                  <span className="text-[12px] font-semibold text-[#526069] leading-4">of</span>
+                  <span className="text-[12px] font-normal text-[#526069] leading-4">of</span>
                 )}
                 {isMetricSort(sortField) ? (
               <Popover open={sortScopeOpen} onOpenChange={(open) => {
@@ -717,7 +717,7 @@ export function DocumentBrowser({
                 if (!open) setFieldSearch("")
               }}>
                 <PopoverTrigger asChild>
-                  <button className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 whitespace-nowrap hover:text-[#0067df] transition-colors">
+                  <button className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 whitespace-nowrap hover:text-[#0067df] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm">
                     {sortScope === "all-fields"
                       ? "All fields"
                       : (extractedFields.find(f => f.id === sortScope)?.name ?? "Field")}
@@ -737,7 +737,8 @@ export function DocumentBrowser({
 
                   {/* Search */}
                   <div className="px-4 py-2">
-                    <div className="flex items-center border border-[#526069] rounded-[3px] h-10 px-4 gap-2 bg-white">
+                    <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
+                      <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
                       <input
                         value={fieldSearch}
                         onChange={(e) => setFieldSearch(e.target.value)}
@@ -755,7 +756,7 @@ export function DocumentBrowser({
                       <button
                         onClick={() => { setSortScope("all-fields"); setSortScopeOpen(false); setFieldSearch("") }}
                         className={cn(
-                          "w-full relative h-10 flex items-center px-4 text-left transition-colors",
+                          "w-full relative h-10 flex items-center px-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
                           sortScope === "all-fields" ? "bg-[#e9f1fa]" : "hover:bg-accent"
                         )}
                       >
@@ -792,7 +793,7 @@ export function DocumentBrowser({
                               else next.add(group.name)
                               return next
                             })}
-                            className="w-full flex items-center gap-2 px-2 py-2 hover:bg-accent transition-colors text-left"
+                            className="w-full flex items-center gap-2 px-4 py-2 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
                           >
                             <ChevronRight className={cn(
                               "h-4 w-4 text-[#526069] flex-shrink-0 transition-transform",
@@ -817,7 +818,7 @@ export function DocumentBrowser({
                                 key={field.id}
                                 onClick={() => { setSortScope(field.id); setSortScopeOpen(false); setFieldSearch("") }}
                                 className={cn(
-                                  "w-full relative flex items-center gap-2 pl-14 pr-4 py-2 text-left transition-colors",
+                                  "w-full relative flex items-center gap-2 pl-14 pr-4 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
                                   isSelected ? "bg-[#e9f1fa]" : "hover:bg-accent"
                                 )}
                               >
@@ -849,7 +850,7 @@ export function DocumentBrowser({
                 {/* Clear sort */}
                 <button
                   onClick={() => { setSortField(""); setSortScope("all-fields") }}
-                  className="hover:text-[#273139] text-[#526069] transition-colors flex-shrink-0"
+                  className="hover:text-[#273139] text-[#526069] transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -867,15 +868,15 @@ export function DocumentBrowser({
                   <div className="flex items-center gap-1.5 bg-[#cfd8dd] rounded-full px-3 py-[2px]">
                     <button
                       onClick={() => setFilterOpen(true)}
-                      className="text-[12px] font-semibold text-[#273139] leading-4 hover:text-[#0067df] transition-colors whitespace-nowrap"
+                      className="text-[12px] font-semibold text-[#273139] leading-4 hover:text-[#0067df] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                     >
                       {Array.from(filterStatuses).map(s => getStatusInfo(s).label).join(", ")}
                     </button>
                     <button
                       onClick={() => setFilterStatuses(new Set())}
-                      className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors"
+                      className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
@@ -895,9 +896,9 @@ export function DocumentBrowser({
                       </button>
                       <button
                         onClick={() => { setFilterTags(new Set()); setFilterTagEmpty(false) }}
-                        className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors"
+                        className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   )
@@ -954,38 +955,38 @@ export function DocumentBrowser({
                 {/* Row 1: File icon + name + status badge + more actions */}
                 <div className="flex items-center gap-1.5">
                   <div className="flex-shrink-0 flex items-center justify-center w-5 h-5">
-                    <FileText className="h-4 w-4 text-red-500" />
+                    <FileText className="h-4 w-4 text-[#526069]" />
                   </div>
 
                   <Tooltip delayDuration={400}>
                     <TooltipTrigger asChild>
-                      <p className="text-xs font-medium truncate flex-1 min-w-0">{doc.name}</p>
+                      <p className="text-[12px] font-medium truncate flex-1 min-w-0">{doc.name}</p>
                     </TooltipTrigger>
                     <TooltipContent
                       side="right"
                       align="start"
-                      className="max-w-[260px] p-0 bg-white text-zinc-900 border-zinc-200 shadow-lg"
+                      className="max-w-[260px] p-0 bg-white text-[#273139] border-[#cfd8dd] shadow-lg"
                       sideOffset={12}
                     >
                       <div className="p-3 space-y-2.5">
-                        <p className="text-xs font-medium leading-snug break-words text-zinc-900">{doc.name}</p>
+                        <p className="text-[13px] font-semibold leading-snug break-words text-[#273139]">{doc.name}</p>
                         <div className="space-y-1.5">
                           {doc.lastEdited && (
                             <div className="flex items-center justify-between gap-4">
-                              <span className="text-[10px] text-zinc-500">Last edited</span>
-                              <span className="text-[10px] font-medium text-zinc-700">{formatDate(doc.lastEdited)}</span>
+                              <span className="text-[10px] text-[#526069]">Last edited</span>
+                              <span className="text-[10px] font-medium text-[#273139]">{formatDate(doc.lastEdited)}</span>
                             </div>
                           )}
                           <div className="flex items-center justify-between gap-4">
-                            <span className="text-[10px] text-zinc-500">Pages</span>
-                            <span className="text-[10px] font-medium text-zinc-700">{doc.pages}</span>
+                            <span className="text-[10px] text-[#526069]">Pages</span>
+                            <span className="text-[10px] font-medium text-[#273139]">{doc.pages}</span>
                           </div>
                           {doc.tags && doc.tags.length > 0 && (
                             <div className="flex items-start justify-between gap-4">
-                              <span className="text-[10px] text-zinc-500 mt-0.5">Tags</span>
+                              <span className="text-[10px] text-[#526069] mt-0.5">Tags</span>
                               <div className="flex flex-wrap gap-1 justify-end">
                                 {doc.tags.map((tag) => (
-                                  <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 font-medium">
+                                  <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-[#f4f5f7] text-[#526069] font-medium">
                                     {tag}
                                   </span>
                                 ))}
@@ -1040,16 +1041,16 @@ export function DocumentBrowser({
                 {(() => {
                   const sortVal = sortField ? getSortValue(doc, sortField) : null
                   return (
-                    <div className="mt-1 pl-6 flex items-center gap-2">
+                    <div className="mt-1 pl-[26px] flex items-center gap-2">
                       <div className="flex-1 min-w-0 overflow-hidden">
                         {tagsText ? (
                           <span className="text-[11px] text-[#526069] truncate block">{tagsText}</span>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground">{doc.pages} {doc.pages === 1 ? "page" : "pages"}</span>
+                          <span className="text-[11px] text-muted-foreground">{doc.pages} {doc.pages === 1 ? "page" : "pages"}</span>
                         )}
                       </div>
                       {sortVal != null && (
-                        <span className="flex-shrink-0 text-[12px] text-[#526069] leading-4 tabular-nums">{sortVal}</span>
+                        <span className="flex-shrink-0 text-[11px] text-[#526069] leading-4 tabular-nums">{sortVal}</span>
                       )}
                     </div>
                   )
@@ -1069,7 +1070,7 @@ export function DocumentBrowser({
               {activeFilterCount > 0 ? "Try adjusting your filters." : "Try a different search."}
             </p>
             {activeFilterCount > 0 && (
-              <Button variant="outline" size="sm" className="text-xs h-7 bg-transparent" onClick={clearAllFilters}>
+              <Button variant="outline" size="sm" className="text-xs h-7" onClick={clearAllFilters}>
                 Clear all filters
               </Button>
             )}
