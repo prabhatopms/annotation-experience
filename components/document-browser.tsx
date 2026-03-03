@@ -37,6 +37,7 @@ import {
   Tag,
   Plus,
   Upload,
+  Crosshair,
 } from "lucide-react"
 import React, { useState, useMemo, useCallback, useRef } from "react"
 import type { Document, ExtractedField } from "@/lib/types"
@@ -137,6 +138,7 @@ export function DocumentBrowser({
   selectedDocumentId,
   onDocumentSelect,
   onResetDocument,
+  onUpdateDocument,
   onBulkDownload,
   onBulkDelete,
   currentVersion,
@@ -190,6 +192,9 @@ export function DocumentBrowser({
 
   // Bulk delete confirmation
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  // Focus mode — show only a pinned subset of docs
+  const [focusedDocIds, setFocusedDocIds] = useState<Set<string>>(new Set())
 
   // Group by bands when sort is active
   const [groupByEnabled, setGroupByEnabled] = useState(true)
@@ -268,12 +273,20 @@ export function DocumentBrowser({
     })
   }, [documents, filterDocument, sortField, sortDirection])
 
+  // Apply focus filter on top of search/status/tag filters
+  const visibleDocuments = useMemo(() =>
+    focusedDocIds.size > 0
+      ? filteredDocuments.filter((doc) => focusedDocIds.has(doc.id))
+      : filteredDocuments,
+    [filteredDocuments, focusedDocIds],
+  )
+
   // Build flat list with optional band-header rows when a sort field is active
   const docItems = useMemo(() => {
-    if (!sortField || !groupByEnabled) return filteredDocuments.map((doc) => ({ type: "doc" as const, doc }))
+    if (!sortField || !groupByEnabled) return visibleDocuments.map((doc) => ({ type: "doc" as const, doc }))
     const result: Array<{ type: "band"; label: string } | { type: "doc"; doc: Document }> = []
     let currentBand = ""
-    for (const doc of filteredDocuments) {
+    for (const doc of visibleDocuments) {
       const band = getBandLabel(doc, sortField)
       if (band !== currentBand) {
         currentBand = band
@@ -282,7 +295,7 @@ export function DocumentBrowser({
       result.push({ type: "doc", doc })
     }
     return result
-  }, [filteredDocuments, sortField, groupByEnabled])
+  }, [visibleDocuments, sortField, groupByEnabled])
 
   const activeFilterCount = [filterStatuses.size > 0, filterTags.size > 0 || filterTagEmpty].filter(Boolean).length
   const isSortActive = sortField !== ""
@@ -588,22 +601,22 @@ export function DocumentBrowser({
               <PopoverContent
                 align="start"
                 sideOffset={8}
-                className="w-[302px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                className="w-[302px] p-0"
               >
                 {/* SORT BY header */}
-                <div className="px-4 h-8 flex items-center">
-                  <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Sort by</span>
+                <div className="px-3 py-2.5 flex items-center border-b border-border">
+                  <span className="text-xs font-semibold">Sort by</span>
                 </div>
 
                 {/* Search input */}
-                <div className="px-4 py-2">
-                  <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
-                    <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                <div className="px-3 py-2">
+                  <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
+                    <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     <input
                       value={sortSearch}
                       onChange={(e) => setSortSearch(e.target.value)}
                       placeholder="Type to search"
-                      className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                      className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
                     />
                   </div>
                 </div>
@@ -621,12 +634,9 @@ export function DocumentBrowser({
                     <button
                       key={f.value}
                       onClick={() => { setSortField(f.value as typeof sortField); setSortSearch(""); setSortScope("all-fields") }}
-                      className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                      className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", sortField === f.value && "bg-primary/5")}
                     >
-                      {sortField === f.value && (
-                        <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />
-                      )}
-                      <span className={cn("text-[14px] leading-5 text-[#526069]", sortField === f.value && "font-medium")}>
+                      <span className={cn("text-xs text-muted-foreground", sortField === f.value && "font-medium text-foreground")}>
                         {f.label}
                       </span>
                     </button>
@@ -637,31 +647,30 @@ export function DocumentBrowser({
                 {!sortSearch ? (
                   <Popover open={moreMetricsOpen} onOpenChange={setMoreMetricsOpen}>
                     <PopoverTrigger asChild>
-                      <button className="w-full relative h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset">
-                        <span className={cn("text-[14px] leading-5 text-[#526069]", MORE_METRICS.some(m => m.value === sortField) && "font-medium text-[#273139]")}>
+                      <button className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                        <span className={cn("text-xs text-muted-foreground", MORE_METRICS.some(m => m.value === sortField) && "font-medium text-foreground")}>
                           More metrics
                         </span>
-                        <ChevronRight className={cn("h-4 w-4 text-[#526069] transition-transform", moreMetricsOpen && "rotate-90")} />
+                        <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", moreMetricsOpen && "rotate-90")} />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent
                       side="right"
                       align="start"
                       sideOffset={4}
-                      className="w-[280px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                      className="w-[280px] p-0"
                     >
-                      <div className="px-4 h-8 flex items-center">
-                        <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">More metrics</span>
+                      <div className="px-3 py-2.5 flex items-center border-b border-border">
+                        <span className="text-xs font-semibold">More metrics</span>
                       </div>
                       <div className="max-h-[360px] overflow-y-auto">
                         {MORE_METRICS.map((m) => (
                           <button
                             key={m.value}
                             onClick={() => { setSortField(m.value); setMoreMetricsOpen(false); setSortOpen(false); setSortScope("all-fields") }}
-                            className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                            className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", sortField === m.value && "bg-primary/5")}
                           >
-                            {sortField === m.value && <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />}
-                            <span className={cn("text-[14px] leading-5 text-[#526069]", sortField === m.value && "font-medium")}>
+                            <span className={cn("text-xs text-muted-foreground", sortField === m.value && "font-medium text-foreground")}>
                               {m.label}
                             </span>
                           </button>
@@ -677,10 +686,9 @@ export function DocumentBrowser({
                       <button
                         key={m.value}
                         onClick={() => { setSortField(m.value); setSortSearch("") }}
-                        className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                        className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", sortField === m.value && "bg-primary/5")}
                       >
-                        {sortField === m.value && <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />}
-                        <span className={cn("text-[14px] leading-5 text-[#526069]", sortField === m.value && "font-medium")}>
+                        <span className={cn("text-xs text-muted-foreground", sortField === m.value && "font-medium text-foreground")}>
                           {m.label}
                         </span>
                       </button>
@@ -688,9 +696,7 @@ export function DocumentBrowser({
                 )}
 
                 {/* Divider */}
-                <div className="py-2">
-                  <div className="bg-[#cfd8dd] h-px" />
-                </div>
+                <div className="mx-3 my-1 border-t border-border" />
 
                 {/* Direction */}
                 {[
@@ -701,14 +707,11 @@ export function DocumentBrowser({
                     <button
                       key={d.value}
                       onClick={() => { setSortDirection(d.value); setSortSearch("") }}
-                      className="w-full relative h-10 flex items-center px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                      className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", sortDirection === d.value && sortField && "bg-primary/5")}
                     >
-                      {sortDirection === d.value && sortField && (
-                        <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />
-                      )}
                       <span className={cn(
-                        "text-[14px] leading-5 text-[#526069]",
-                        sortDirection === d.value && sortField && "font-medium",
+                        "text-xs text-muted-foreground",
+                        sortDirection === d.value && sortField && "font-medium text-foreground",
                       )}>
                         {d.label}
                       </span>
@@ -716,23 +719,19 @@ export function DocumentBrowser({
                   ))}
 
                 {/* Group by toggle */}
-                <div className="py-2">
-                  <div className="bg-[#cfd8dd] h-px" />
-                </div>
-                <div className="px-4 pb-1 flex items-center justify-between h-10">
-                  <span className="text-[14px] leading-5 text-[#526069]">Group by</span>
+                <div className="mx-3 my-1 border-t border-border" />
+                <div className="px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Group by</span>
                   <Switch checked={groupByEnabled} onCheckedChange={setGroupByEnabled} />
                 </div>
 
                 {/* Compare to version — only visible when a metric sort is active */}
                 {isMetricSort(sortField) && (
                   <>
-                    <div className="py-2">
-                      <div className="bg-[#cfd8dd] h-px" />
-                    </div>
-                    <div className="px-4 pb-3">
-                      <div className="flex items-center justify-between h-8">
-                        <span className="text-[12px] font-semibold text-[#526069] uppercase tracking-wider">Compare to version</span>
+                    <div className="mx-3 my-1 border-t border-border" />
+                    <div className="px-3 pb-3">
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-xs font-semibold">Compare to version</span>
                         <Switch
                           checked={deltaEnabled}
                           onCheckedChange={(checked) => {
@@ -748,7 +747,7 @@ export function DocumentBrowser({
                             setDeltaVersionId(e.target.value)
                             onDeltaVersionChange?.(e.target.value || null)
                           }}
-                          className="mt-1 w-full h-8 text-[13px] text-[#273139] bg-[#f4f5f7] border border-[#cfd8dd] rounded-[3px] px-2 focus:outline-none focus:ring-2 focus:ring-[#0067df] cursor-pointer"
+                          className="mt-1 w-full h-8 text-xs text-foreground bg-muted border border-input rounded-md px-2 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                         >
                           <option value="">Select version…</option>
                           {(versions ?? MOCK_VERSIONS).map((v) => (
@@ -782,27 +781,27 @@ export function DocumentBrowser({
               <PopoverContent
                 align="start"
                 sideOffset={8}
-                className="w-[240px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                className="w-[240px] p-0"
               >
                 {/* Level-1 header */}
-                <div className="px-4 h-8 flex items-center">
-                  <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Filter by</span>
+                <div className="px-3 py-2.5 flex items-center border-b border-border">
+                  <span className="text-xs font-semibold">Filter by</span>
                 </div>
 
                 {/* ── Status row → flyout ── */}
                 <Popover open={statusFlyoutOpen} onOpenChange={setStatusFlyoutOpen}>
                   <PopoverTrigger asChild>
-                    <button className="w-full h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset">
-                      <span className={cn("text-[14px] leading-5 text-[#526069]", filterStatuses.size > 0 && "font-medium text-[#273139]")}>
+                    <button className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                      <span className={cn("text-xs text-muted-foreground", filterStatuses.size > 0 && "font-medium text-foreground")}>
                         Status
                       </span>
                       <div className="flex items-center gap-1.5">
                         {filterStatuses.size > 0 && (
-                          <span className="text-[10px] font-semibold bg-[#f4f5f7] rounded-lg px-2 py-0.5 text-[#273139]">
+                          <span className="text-[10px] font-semibold bg-muted rounded-md px-2 py-0.5 text-foreground">
                             {filterStatuses.size}
                           </span>
                         )}
-                        <ChevronRight className={cn("h-4 w-4 text-[#526069] transition-transform", statusFlyoutOpen && "rotate-90")} />
+                        <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", statusFlyoutOpen && "rotate-90")} />
                       </div>
                     </button>
                   </PopoverTrigger>
@@ -810,19 +809,19 @@ export function DocumentBrowser({
                     side="right"
                     align="start"
                     sideOffset={4}
-                    className="w-[240px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                    className="w-[240px] p-0"
                   >
-                    <div className="px-4 h-8 flex items-center">
-                      <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Status</span>
+                    <div className="px-3 py-2.5 flex items-center border-b border-border">
+                      <span className="text-xs font-semibold">Status</span>
                     </div>
                     {statuses.map((s) => (
                       <button
                         key={s.value}
                         onClick={() => toggleStatus(s.value)}
-                        className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       >
                         <Checkbox checked={filterStatuses.has(s.value)} className="h-4 w-4 pointer-events-none rounded-[2px]" />
-                        <span className="text-[14px] leading-5 text-[#526069]">{s.label}</span>
+                        <span className="text-xs text-muted-foreground">{s.label}</span>
                       </button>
                     ))}
                   </PopoverContent>
@@ -831,17 +830,17 @@ export function DocumentBrowser({
                 {/* ── Tags row → flyout ── */}
                 <Popover open={tagsFlyoutOpen} onOpenChange={(open) => { setTagsFlyoutOpen(open); if (!open) setTagSearch("") }}>
                   <PopoverTrigger asChild>
-                    <button className="w-full h-10 flex items-center justify-between px-4 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset">
-                      <span className={cn("text-[14px] leading-5 text-[#526069]", (filterTags.size > 0 || filterTagEmpty) && "font-medium text-[#273139]")}>
+                    <button className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                      <span className={cn("text-xs text-muted-foreground", (filterTags.size > 0 || filterTagEmpty) && "font-medium text-foreground")}>
                         Tags
                       </span>
                       <div className="flex items-center gap-1.5">
                         {(filterTags.size > 0 || filterTagEmpty) && (
-                          <span className="text-[10px] font-semibold bg-[#f4f5f7] rounded-lg px-2 py-0.5 text-[#273139]">
+                          <span className="text-[10px] font-semibold bg-muted rounded-md px-2 py-0.5 text-foreground">
                             {filterTags.size + (filterTagEmpty ? 1 : 0)}
                           </span>
                         )}
-                        <ChevronRight className={cn("h-4 w-4 text-[#526069] transition-transform", tagsFlyoutOpen && "rotate-90")} />
+                        <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", tagsFlyoutOpen && "rotate-90")} />
                       </div>
                     </button>
                   </PopoverTrigger>
@@ -849,23 +848,21 @@ export function DocumentBrowser({
                     side="right"
                     align="start"
                     sideOffset={4}
-                    className="w-[280px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                    className="w-[280px] p-0"
                   >
-                    <div className="px-4 h-8 flex items-center">
-                      <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Tags</span>
+                    <div className="px-3 py-2.5 flex items-center border-b border-border">
+                      <span className="text-xs font-semibold">Tags</span>
                     </div>
 
                     {/* Contains toggle */}
                     <div className="flex items-center gap-2.5 px-4 py-2">
-                      <span className="text-[11px] font-semibold leading-4 text-[#273139]">Contains</span>
-                      <div className="flex items-center bg-[#f4f5f7] rounded-[6px] p-[2px]">
+                      <span className="text-xs font-semibold text-muted-foreground">Contains</span>
+                      <div className="flex items-center bg-muted rounded-md p-[2px]">
                         <button
                           onClick={() => setTagContainsMode("any")}
                           className={cn(
-                            "px-2 py-1 rounded-[4px] text-[11px] font-semibold leading-4 text-[#273139] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df]",
-                            tagContainsMode === "any"
-                              ? "bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.2),0px_1px_1px_0px_rgba(0,0,0,0.14),0px_2px_1px_0px_rgba(0,0,0,0.12)]"
-                              : "hover:bg-white/50",
+                            "px-2 py-1 rounded text-[11px] font-semibold text-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            tagContainsMode === "any" ? "bg-background shadow-sm" : "hover:bg-background/50",
                           )}
                         >
                           Any selected
@@ -873,10 +870,8 @@ export function DocumentBrowser({
                         <button
                           onClick={() => setTagContainsMode("all")}
                           className={cn(
-                            "px-2 py-1 rounded-[4px] text-[11px] font-semibold leading-4 text-[#273139] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df]",
-                            tagContainsMode === "all"
-                              ? "bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.2),0px_1px_1px_0px_rgba(0,0,0,0.14),0px_2px_1px_0px_rgba(0,0,0,0.12)]"
-                              : "hover:bg-white/50",
+                            "px-2 py-1 rounded text-[11px] font-semibold text-foreground transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            tagContainsMode === "all" ? "bg-background shadow-sm" : "hover:bg-background/50",
                           )}
                         >
                           All selected
@@ -885,14 +880,14 @@ export function DocumentBrowser({
                     </div>
 
                     {/* Tag search */}
-                    <div className="px-4 pb-2">
-                      <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
-                        <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                    <div className="px-3 pb-2">
+                      <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
+                        <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                         <input
                           value={tagSearch}
                           onChange={(e) => setTagSearch(e.target.value)}
                           placeholder="Type to search tags"
-                          className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                          className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
                         />
                       </div>
                     </div>
@@ -901,33 +896,33 @@ export function DocumentBrowser({
                     <div className="max-h-[240px] overflow-y-auto">
                       <button
                         onClick={() => setFilterTagEmpty(!filterTagEmpty)}
-                        className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       >
                         <Checkbox checked={filterTagEmpty} className="h-4 w-4 pointer-events-none rounded-[2px]" />
-                        <span className="text-[14px] leading-5 italic text-[#526069]">Empty (no tag assigned)</span>
+                        <span className="text-xs italic text-muted-foreground">Empty (no tag assigned)</span>
                       </button>
-                      <div className="bg-[#cfd8dd] h-px" />
+                      <div className="mx-3 my-1 border-t border-border" />
                       {allTags.length > 0 && (
                         <button
                           onClick={toggleSelectAll}
-                          className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         >
                           <Checkbox checked={allTagsSelected} className="h-4 w-4 pointer-events-none rounded-[2px]" />
-                          <span className="text-[14px] font-semibold leading-5 text-[#526069]">Select all</span>
+                          <span className="text-xs font-semibold text-muted-foreground">Select all</span>
                         </button>
                       )}
                       {visibleTags.map((tag) => (
                         <button
                           key={tag}
                           onClick={() => toggleTag(tag)}
-                          className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         >
                           <Checkbox checked={filterTags.has(tag)} className="h-4 w-4 pointer-events-none rounded-[2px]" />
-                          <span className="text-[14px] leading-5 text-[#526069]">{tag}</span>
+                          <span className="text-xs text-muted-foreground">{tag}</span>
                         </button>
                       ))}
                       {visibleTags.length === 0 && tagSearch && (
-                        <p className="px-4 py-3 text-[13px] text-[#526069]">No tags match "{tagSearch}"</p>
+                        <p className="px-3 py-3 text-xs text-muted-foreground">No tags match "{tagSearch}"</p>
                       )}
                     </div>
 
@@ -961,8 +956,8 @@ export function DocumentBrowser({
         </div>
       </div>
 
-      {/* ── Active chips bar (sort + filters + delta) ── */}
-      {(isSortActive || activeFilterCount > 0 || (deltaEnabled && deltaVersionId)) && (
+      {/* ── Active chips bar (sort + filters + delta + focus) ── */}
+      {(isSortActive || activeFilterCount > 0 || (deltaEnabled && deltaVersionId) || focusedDocIds.size > 0) && (
         <div className="px-3 py-3 border-b border-[#cfd8dd] flex flex-col gap-2">
 
           {/* Sort chip row */}
@@ -1005,24 +1000,24 @@ export function DocumentBrowser({
                 <PopoverContent
                   align="start"
                   sideOffset={8}
-                  className="w-[320px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0 overflow-hidden"
+                  className="w-[320px] p-0 overflow-hidden"
                 >
                   {/* Title */}
-                  <div className="px-4 py-1">
-                    <p className="text-[16px] font-semibold leading-6 text-[#273139] whitespace-pre-wrap">
+                  <div className="px-3 py-2.5 border-b border-border">
+                    <p className="text-sm font-semibold text-foreground whitespace-pre-wrap">
                       Sort against a field metric occurring on documents
                     </p>
                   </div>
 
                   {/* Search */}
-                  <div className="px-4 py-2">
-                    <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
-                      <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                  <div className="px-3 py-2">
+                    <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
+                      <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                       <input
                         value={fieldSearch}
                         onChange={(e) => setFieldSearch(e.target.value)}
                         placeholder="Type to search field"
-                        className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none"
+                        className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none"
                         autoFocus
                       />
                     </div>
@@ -1035,15 +1030,12 @@ export function DocumentBrowser({
                       <button
                         onClick={() => { setSortScope("all-fields"); setSortScopeOpen(false); setFieldSearch("") }}
                         className={cn(
-                          "w-full relative h-10 flex items-center px-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
-                          sortScope === "all-fields" ? "bg-[#e9f1fa]" : "hover:bg-accent"
+                          "w-full flex items-center px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                          sortScope === "all-fields" ? "bg-primary/5" : "hover:bg-muted/50"
                         )}
                       >
-                        {sortScope === "all-fields" && (
-                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />
-                        )}
                         <span className={cn(
-                          "text-[14px] leading-5 text-[#273139]",
+                          "text-xs text-foreground",
                           sortScope === "all-fields" && "font-semibold"
                         )}>
                           All fields
@@ -1072,17 +1064,17 @@ export function DocumentBrowser({
                               else next.add(group.name)
                               return next
                             })}
-                            className="w-full flex items-center gap-2 px-4 py-2 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                           >
                             <ChevronRight className={cn(
-                              "h-4 w-4 text-[#526069] flex-shrink-0 transition-transform",
+                              "h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform",
                               (isExpanded || !!fieldSearch) && "rotate-90"
                             )} />
-                            <LayoutGrid className="h-4 w-4 text-[#526069] flex-shrink-0" />
-                            <span className="flex-1 min-w-0 text-[14px] font-semibold leading-5 text-[#273139] truncate">
+                            <LayoutGrid className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">
                               {group.name}
                             </span>
-                            <span className="flex-shrink-0 text-[10px] font-semibold leading-4 text-[#273139] bg-[#f4f5f7] rounded-lg px-2 py-0.5">
+                            <span className="flex-shrink-0 text-[10px] font-semibold text-foreground bg-muted rounded-md px-2 py-0.5">
                               {group.fields.length} fields
                             </span>
                           </button>
@@ -1097,16 +1089,13 @@ export function DocumentBrowser({
                                 key={field.id}
                                 onClick={() => { setSortScope(field.id); setSortScopeOpen(false); setFieldSearch("") }}
                                 className={cn(
-                                  "w-full relative flex items-center gap-2 pl-14 pr-4 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
-                                  isSelected ? "bg-[#e9f1fa]" : "hover:bg-accent"
+                                  "w-full flex items-center gap-2 pl-14 pr-4 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                                  isSelected ? "bg-primary/5" : "hover:bg-muted/50"
                                 )}
                               >
-                                {isSelected && (
-                                  <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#0067df]" />
-                                )}
-                                <DataTypeIcon className="h-4 w-4 text-[#526069] flex-shrink-0" />
+                                <DataTypeIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                 <span className={cn(
-                                  "text-[14px] leading-5 text-[#273139]",
+                                  "text-xs text-foreground",
                                   isSelected && "font-semibold"
                                 )}>
                                   {field.name}
@@ -1119,7 +1108,7 @@ export function DocumentBrowser({
                     })}
 
                     {fieldGroups.length === 0 && (
-                      <p className="px-4 py-3 text-[13px] text-[#526069]">No fields available</p>
+                      <p className="px-3 py-3 text-xs text-muted-foreground">No fields available</p>
                     )}
                   </div>
                 </PopoverContent>
@@ -1151,6 +1140,24 @@ export function DocumentBrowser({
                 </button>
                 <button
                   onClick={() => { setDeltaEnabled(false); setDeltaVersionId(""); onDeltaVersionChange?.(null) }}
+                  className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Focus chip row */}
+          {focusedDocIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <Crosshair className="h-4 w-4 text-[#526069] flex-shrink-0" />
+              <div className="flex items-center gap-1.5 bg-[#cfd8dd] rounded-full px-3 py-[2px]">
+                <span className="text-[12px] font-semibold text-[#273139] leading-4 whitespace-nowrap">
+                  {focusedDocIds.size} {focusedDocIds.size === 1 ? "doc" : "docs"} focused
+                </span>
+                <button
+                  onClick={() => setFocusedDocIds(new Set())}
                   className="flex-shrink-0 text-[#526069] hover:text-[#273139] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -1245,6 +1252,16 @@ export function DocumentBrowser({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuItem
+                      onClick={() => {
+                        setFocusedDocIds(new Set(selectedDocIds))
+                        setSelectedDocIds(new Set())
+                      }}
+                      className="cursor-pointer text-xs"
+                    >
+                      <Crosshair className="h-3.5 w-3.5 mr-2" /> Focus on selected
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
                       onClick={() => setBulkTagOpen(true)}
                       className="cursor-pointer text-xs"
                     >
@@ -1270,24 +1287,24 @@ export function DocumentBrowser({
                 side="top"
                 align="end"
                 sideOffset={8}
-                className="w-[260px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                className="w-[260px] p-0"
               >
                 {/* Header */}
-                <div className="px-4 h-8 flex items-center justify-between">
-                  <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Tags</span>
-                  <span className="text-[10px] font-semibold text-[#526069] bg-[#f4f5f7] rounded-full px-2 py-0.5">
+                <div className="px-3 py-2.5 flex items-center justify-between border-b border-border">
+                  <span className="text-xs font-semibold">Tags</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground bg-muted rounded-full px-2 py-0.5">
                     {selectedDocIds.size} docs
                   </span>
                 </div>
                 {/* Search */}
-                <div className="px-4 pb-2">
-                  <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
-                    <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                <div className="px-3 pb-2">
+                  <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
+                    <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     <input
                       value={bulkTagSearch}
                       onChange={(e) => setBulkTagSearch(e.target.value)}
                       placeholder="Search tags…"
-                      className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                      className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
                       autoFocus
                     />
                   </div>
@@ -1302,15 +1319,15 @@ export function DocumentBrowser({
                         <button
                           key={tag}
                           onClick={() => toggleBulkTag(tag)}
-                          className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         >
                           <Checkbox
                             checked={state === "all" ? true : state === "some" ? "indeterminate" : false}
                             className="h-4 w-4 pointer-events-none rounded-[2px]"
                           />
-                          <span className="text-[14px] leading-5 text-[#526069] flex-1 truncate">{tag}</span>
+                          <span className="text-xs text-muted-foreground flex-1 truncate">{tag}</span>
                           {state === "some" && (
-                            <span className="text-[10px] font-semibold text-[#526069] bg-[#f4f5f7] rounded-full px-1.5 py-0.5 flex-shrink-0">
+                            <span className="text-[10px] font-semibold text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 flex-shrink-0">
                               partial
                             </span>
                           )}
@@ -1319,27 +1336,27 @@ export function DocumentBrowser({
                     })
                   }
                   {allTags.filter((t) => !bulkTagSearch || t.toLowerCase().includes(bulkTagSearch.toLowerCase())).length === 0 && (
-                    <p className="px-4 py-3 text-[13px] text-[#526069]">
+                    <p className="px-3 py-3 text-xs text-muted-foreground">
                       {bulkTagSearch ? `No tags match "${bulkTagSearch}"` : "No tags yet"}
                     </p>
                   )}
                 </div>
                 {/* New tag input */}
-                <div className="border-t border-[#cfd8dd] px-4 py-2">
+                <div className="border-t border-border px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 flex items-center border border-[#526069] rounded-[3px] h-8 px-3 bg-white">
+                    <div className="flex-1 flex items-center border border-input rounded-md h-8 px-3 bg-background">
                       <input
                         value={bulkNewTagInput}
                         onChange={(e) => setBulkNewTagInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitBulkNewTag(bulkNewTagInput) } }}
                         placeholder="New tag…"
-                        className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                        className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
                       />
                     </div>
                     <button
                       onClick={() => commitBulkNewTag(bulkNewTagInput)}
                       disabled={!bulkNewTagInput.trim()}
-                      className="h-8 w-8 flex items-center justify-center rounded-[3px] bg-[#0067df] text-white hover:bg-[#0057c7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-offset-1"
+                      className="h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
@@ -1570,21 +1587,21 @@ export function DocumentBrowser({
                     side="right"
                     align="center"
                     sideOffset={8}
-                    className="w-[260px] p-0 rounded-[3px] shadow-[0px_3px_5px_-1px_rgba(0,0,0,0.2),0px_6px_10px_0px_rgba(0,0,0,0.14),0px_1px_18px_0px_rgba(0,0,0,0.12)] border-0"
+                    className="w-[260px] p-0"
                   >
                     {/* Header */}
-                    <div className="px-4 h-8 flex items-center">
-                      <span className="text-[12px] font-semibold leading-4 text-[#526069] uppercase tracking-wider">Tags</span>
+                    <div className="px-3 py-2.5 flex items-center border-b border-border">
+                      <span className="text-xs font-semibold">Tags</span>
                     </div>
                     {/* Search */}
-                    <div className="px-4 pb-2">
-                      <div className="flex items-center border border-[#526069] rounded-[3px] h-8 px-3 gap-2 bg-white">
-                        <Search className="h-3.5 w-3.5 text-[#526069] flex-shrink-0" />
+                    <div className="px-3 pb-2">
+                      <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
+                        <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                         <input
                           value={tagEditorSearch}
                           onChange={(e) => setTagEditorSearch(e.target.value)}
                           placeholder="Search tags…"
-                          className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                          className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
                           autoFocus
                         />
                       </div>
@@ -1597,38 +1614,38 @@ export function DocumentBrowser({
                           <button
                             key={tag}
                             onClick={() => toggleDocTag(doc.id, tag)}
-                            className="w-full flex items-center gap-2 px-4 h-10 hover:bg-accent transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                           >
                             <Checkbox
                               checked={doc.tags?.includes(tag) ?? false}
                               className="h-4 w-4 pointer-events-none rounded-[2px]"
                             />
-                            <span className="text-[14px] leading-5 text-[#526069] truncate">{tag}</span>
+                            <span className="text-xs text-muted-foreground truncate">{tag}</span>
                           </button>
                         ))
                       }
                       {allTags.filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase())).length === 0 && (
-                        <p className="px-4 py-3 text-[13px] text-[#526069]">
+                        <p className="px-3 py-3 text-xs text-muted-foreground">
                           {tagEditorSearch ? `No tags match "${tagEditorSearch}"` : "No tags yet"}
                         </p>
                       )}
                     </div>
                     {/* New tag input */}
-                    <div className="border-t border-[#cfd8dd] px-4 py-2">
+                    <div className="border-t border-border px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 flex items-center border border-[#526069] rounded-[3px] h-8 px-3 bg-white">
+                        <div className="flex-1 flex items-center border border-input rounded-md h-8 px-3 bg-background">
                           <input
                             value={newTagInput}
                             onChange={(e) => setNewTagInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNewTag(doc.id, newTagInput) } }}
                             placeholder="New tag…"
-                            className="flex-1 text-[14px] leading-5 text-[#273139] placeholder:text-[#6b7882] bg-transparent outline-none min-w-0"
+                            className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
                           />
                         </div>
                         <button
                           onClick={() => commitNewTag(doc.id, newTagInput)}
                           disabled={!newTagInput.trim()}
-                          className="h-8 w-8 flex items-center justify-center rounded-[3px] bg-[#0067df] text-white hover:bg-[#0057c7] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-offset-1"
+                          className="h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
@@ -1641,19 +1658,30 @@ export function DocumentBrowser({
           )
         })}
 
-        {filteredDocuments.length === 0 && (
+        {visibleDocuments.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
             <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
               <FileText className="h-4 w-4 text-muted-foreground" />
             </div>
             <p className="text-xs font-medium text-foreground mb-1">No documents found</p>
             <p className="text-[10px] text-muted-foreground mb-3">
-              {activeFilterCount > 0 ? "Try adjusting your filters." : "Try a different search."}
+              {focusedDocIds.size > 0
+                ? "Focused docs don't match current filters."
+                : activeFilterCount > 0 ? "Try adjusting your filters." : "Try a different search."}
             </p>
-            {activeFilterCount > 0 && (
-              <Button variant="outline" size="sm" className="text-xs h-7" onClick={clearAllFilters}>
-                Clear all filters
-              </Button>
+            {(activeFilterCount > 0 || focusedDocIds.size > 0) && (
+              <div className="flex flex-col gap-1.5 items-center">
+                {activeFilterCount > 0 && (
+                  <Button variant="outline" size="sm" className="text-xs h-7" onClick={clearAllFilters}>
+                    Clear filters
+                  </Button>
+                )}
+                {focusedDocIds.size > 0 && (
+                  <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setFocusedDocIds(new Set())}>
+                    Exit focus
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}

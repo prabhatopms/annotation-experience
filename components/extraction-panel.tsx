@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   AlertCircle,
+  Check,
   RotateCcw,
   MousePointerClick,
   MoreVertical,
@@ -1043,22 +1044,23 @@ export function ExtractionPanel({
               {isDockedBottom && (
                 <>
                   <div className="w-px h-5 bg-border mx-1" />
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-7 text-xs bg-transparent gap-1.5" 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs bg-transparent gap-1.5"
                     onClick={handleSelectAll}
                   >
-                    <Checkbox
-                      checked={filteredFields.length > 0 && filteredFields.every(f => selectedFields.includes(f.id))}
-                      ref={(el) => {
-                        if (el) {
-                          const filteredSelected = filteredFields.filter(f => selectedFields.includes(f.id)).length
-                          el.indeterminate = filteredSelected > 0 && filteredSelected < filteredFields.length
-                        }
-                      }}
-                      className="h-3.5 w-3.5 pointer-events-none"
-                    />
+                    {(() => {
+                      const n = filteredFields.filter(f => selectedFields.includes(f.id)).length
+                      const all = filteredFields.length > 0 && n === filteredFields.length
+                      const some = n > 0 && n < filteredFields.length
+                      return (
+                        <span className={cn("h-3.5 w-3.5 flex-shrink-0 rounded-[4px] border flex items-center justify-center", all || some ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                          {all && <Check className="h-2.5 w-2.5" />}
+                          {some && <span className="h-0.5 w-2 bg-current rounded-full" />}
+                        </span>
+                      )
+                    })()}
                     <span>Select all</span>
                     <span className="text-muted-foreground">({selectedFields.length} of {totalFields})</span>
                   </Button>
@@ -1226,7 +1228,7 @@ export function ExtractionPanel({
                     checked={groupSelected}
                     ref={(el) => {
                       if (el && groupPartiallySelected) {
-                        el.indeterminate = true
+                        (el as unknown as HTMLInputElement).indeterminate = true
                       }
                     }}
                     onCheckedChange={() => handleSelectGroup(subGroups)}
@@ -1351,7 +1353,7 @@ export function ExtractionPanel({
                                 checked={subGroupSelected}
                                 ref={(el) => {
                                   if (el && subGroupPartiallySelected) {
-                                    el.indeterminate = true
+                                    (el as unknown as HTMLInputElement).indeterminate = true
                                   }
                                 }}
                                 onCheckedChange={() => handleSelectSubGroup(subGroupFields)}
@@ -1482,16 +1484,17 @@ export function ExtractionPanel({
                 className="h-9 text-xs bg-transparent gap-1.5 flex-1" 
                 onClick={handleSelectAll}
               >
-                <Checkbox
-                  checked={filteredFields.length > 0 && filteredFields.every(f => selectedFields.includes(f.id))}
-                  ref={(el) => {
-                    if (el) {
-                      const filteredSelected = filteredFields.filter(f => selectedFields.includes(f.id)).length
-                      el.indeterminate = filteredSelected > 0 && filteredSelected < filteredFields.length
-                    }
-                  }}
-                  className="h-3.5 w-3.5 pointer-events-none"
-                />
+                {(() => {
+                  const n = filteredFields.filter(f => selectedFields.includes(f.id)).length
+                  const all = filteredFields.length > 0 && n === filteredFields.length
+                  const some = n > 0 && n < filteredFields.length
+                  return (
+                    <span className={cn("h-3.5 w-3.5 flex-shrink-0 rounded-[4px] border flex items-center justify-center", all || some ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                      {all && <Check className="h-2.5 w-2.5" />}
+                      {some && <span className="h-0.5 w-2 bg-current rounded-full" />}
+                    </span>
+                  )
+                })()}
                 <span>Select all</span>
                 <span className="text-muted-foreground">({selectedFields.length} of {totalFields})</span>
               </Button>
