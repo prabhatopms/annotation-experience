@@ -946,13 +946,13 @@ export function DocumentBrowser({
               <button
                 onClick={() => onDocumentSelect(doc.id)}
                 className={cn(
-                  "w-full text-left pl-[8px] pr-3 py-2.5 border-b border-border/50 border-l-4 transition-colors",
+                  "w-full text-left pl-4 pr-8 py-2.5 border-b border-border/50 border-l-4 transition-colors",
                   isSelected
                     ? "border-l-[#0067df] bg-[#e9f1fa] hover:bg-[#dde8f5]"
                     : "border-l-transparent hover:bg-accent",
                 )}
               >
-                {/* Row 1: File icon + name + status badge + more actions */}
+                {/* Row 1: File icon + name + status badge */}
                 <div className="flex items-center gap-1.5">
                   <div className="flex-shrink-0 flex items-center justify-center w-5 h-5">
                     <FileText className="h-4 w-4 text-[#526069]" />
@@ -1001,40 +1001,6 @@ export function DocumentBrowser({
                   <span className={cn("flex-shrink-0 text-[10px] px-1.5 py-0.5 font-semibold whitespace-nowrap", statusInfo.badgeClassName)}>
                     {statusInfo.label}
                   </span>
-
-                  <div
-                    className={cn("flex-shrink-0 transition-opacity", showActions ? "opacity-100" : "opacity-0")}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <DropdownMenu
-                      open={isMenuOpen}
-                      onOpenChange={(open) => {
-                        setMenuOpenDocId(open ? doc.id : null)
-                        if (!open) setHoveredDocId(null)
-                      }}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-5 w-5">
-                          <MoreHorizontal className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs">
-                          <Download className="h-3.5 w-3.5 mr-2" />
-                          Download
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onResetDocument?.(doc.id)} className="cursor-pointer text-xs">
-                          <RotateCcw className="h-3.5 w-3.5 mr-2" />
-                          Reset extractions
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs text-destructive focus:text-destructive">
-                          <Trash2 className="h-3.5 w-3.5 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
                 </div>
 
                 {/* Row 2: Tags + optional sort value right-aligned */}
@@ -1050,12 +1016,54 @@ export function DocumentBrowser({
                         )}
                       </div>
                       {sortVal != null && (
-                        <span className="flex-shrink-0 text-[11px] text-[#526069] leading-4 tabular-nums">{sortVal}</span>
+                        <span className="flex-shrink-0 text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums">{sortVal}</span>
                       )}
                     </div>
                   )
                 })()}
               </button>
+
+              {/* Three-dot menu — floats outside the row's right boundary */}
+              <div
+                className={cn(
+                  "absolute right-2 top-1/2 -translate-y-1/2 z-20 transition-opacity",
+                  showActions ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DropdownMenu
+                  open={isMenuOpen}
+                  onOpenChange={(open) => {
+                    setMenuOpenDocId(open ? doc.id : null)
+                    if (!open) setHoveredDocId(null)
+                  }}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 rounded-[3px] hover:bg-[#526069]/10"
+                    >
+                      <MoreHorizontal className="h-3 w-3 text-[#526069]" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs">
+                      <Download className="h-3.5 w-3.5 mr-2" />
+                      Download
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onResetDocument?.(doc.id)} className="cursor-pointer text-xs">
+                      <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                      Reset extractions
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs text-destructive focus:text-destructive">
+                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           )
         })}
