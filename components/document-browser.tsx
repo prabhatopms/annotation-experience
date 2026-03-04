@@ -38,6 +38,7 @@ import {
   Plus,
   Upload,
   Crosshair,
+  Check,
 } from "lucide-react"
 import React, { useState, useMemo, useCallback, useRef } from "react"
 import type { Document, ExtractedField } from "@/lib/types"
@@ -195,6 +196,7 @@ export function DocumentBrowser({
 
   // Focus mode — show only a pinned subset of docs
   const [focusedDocIds, setFocusedDocIds] = useState<Set<string>>(new Set())
+  const [focusSelectionMode, setFocusSelectionMode] = useState(false)
 
   // Group by bands when sort is active
   const [groupByEnabled, setGroupByEnabled] = useState(true)
@@ -820,7 +822,9 @@ export function DocumentBrowser({
                         onClick={() => toggleStatus(s.value)}
                         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       >
-                        <Checkbox checked={filterStatuses.has(s.value)} className="h-4 w-4 pointer-events-none rounded-[2px]" />
+                        <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", filterStatuses.has(s.value) ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                          {filterStatuses.has(s.value) && <Check className="h-2.5 w-2.5" />}
+                        </span>
                         <span className="text-xs text-muted-foreground">{s.label}</span>
                       </button>
                     ))}
@@ -898,7 +902,9 @@ export function DocumentBrowser({
                         onClick={() => setFilterTagEmpty(!filterTagEmpty)}
                         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                       >
-                        <Checkbox checked={filterTagEmpty} className="h-4 w-4 pointer-events-none rounded-[2px]" />
+                        <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", filterTagEmpty ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                          {filterTagEmpty && <Check className="h-2.5 w-2.5" />}
+                        </span>
                         <span className="text-xs italic text-muted-foreground">Empty (no tag assigned)</span>
                       </button>
                       <div className="mx-3 my-1 border-t border-border" />
@@ -907,7 +913,9 @@ export function DocumentBrowser({
                           onClick={toggleSelectAll}
                           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         >
-                          <Checkbox checked={allTagsSelected} className="h-4 w-4 pointer-events-none rounded-[2px]" />
+                          <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", allTagsSelected ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                            {allTagsSelected && <Check className="h-2.5 w-2.5" />}
+                          </span>
                           <span className="text-xs font-semibold text-muted-foreground">Select all</span>
                         </button>
                       )}
@@ -917,7 +925,9 @@ export function DocumentBrowser({
                           onClick={() => toggleTag(tag)}
                           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         >
-                          <Checkbox checked={filterTags.has(tag)} className="h-4 w-4 pointer-events-none rounded-[2px]" />
+                          <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", filterTags.has(tag) ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                            {filterTags.has(tag) && <Check className="h-2.5 w-2.5" />}
+                          </span>
                           <span className="text-xs text-muted-foreground">{tag}</span>
                         </button>
                       ))}
@@ -928,6 +938,17 @@ export function DocumentBrowser({
 
                   </PopoverContent>
                 </Popover>
+
+                {/* ── Select to focus ── */}
+                <div className="mx-3 my-1 border-t border-border" />
+                <button
+                  onClick={() => { setFilterOpen(false); setFocusSelectionMode(true) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
+                  <Crosshair className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground">Select documents to focus</span>
+                </button>
+
               </PopoverContent>
             </Popover>
 
@@ -1223,7 +1244,7 @@ export function DocumentBrowser({
       <div className="flex-1 overflow-y-auto">
 
         {/* ── Bulk action bar ── */}
-        {selectedDocIds.size > 0 && (
+        {selectedDocIds.size > 0 && !focusSelectionMode && (
           <div className="sticky top-0 z-30 flex items-center gap-2 px-3 h-10 bg-[#273139] border-b border-[#1a272e]">
             <button
               onClick={() => setSelectedDocIds(new Set())}
@@ -1255,6 +1276,7 @@ export function DocumentBrowser({
                       onClick={() => {
                         setFocusedDocIds(new Set(selectedDocIds))
                         setSelectedDocIds(new Set())
+                        setFocusSelectionMode(false)
                       }}
                       className="cursor-pointer text-xs"
                     >
@@ -1321,10 +1343,10 @@ export function DocumentBrowser({
                           onClick={() => toggleBulkTag(tag)}
                           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                         >
-                          <Checkbox
-                            checked={state === "all" ? true : state === "some" ? "indeterminate" : false}
-                            className="h-4 w-4 pointer-events-none rounded-[2px]"
-                          />
+                          <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", state !== "none" ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                            {state === "all" && <Check className="h-2.5 w-2.5" />}
+                            {state === "some" && <span className="h-0.5 w-2 bg-current rounded-full" />}
+                          </span>
                           <span className="text-xs text-muted-foreground flex-1 truncate">{tag}</span>
                           {state === "some" && (
                             <span className="text-[10px] font-semibold text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 flex-shrink-0">
@@ -1367,6 +1389,34 @@ export function DocumentBrowser({
           </div>
         )}
 
+        {/* Focus selection mode banner */}
+        {focusSelectionMode && (
+          <div className="flex items-center justify-between px-3 py-2 bg-primary/5 border-b border-border gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Crosshair className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+              <span className="text-xs text-primary font-medium truncate">
+                {selectedDocIds.size === 0 ? "Select documents to focus on" : `${selectedDocIds.size} doc${selectedDocIds.size === 1 ? "" : "s"} selected`}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {selectedDocIds.size > 0 && (
+                <button
+                  onClick={() => { setFocusedDocIds(new Set(selectedDocIds)); setSelectedDocIds(new Set()); setFocusSelectionMode(false) }}
+                  className="text-[11px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-colors px-2 py-0.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Focus
+                </button>
+              )}
+              <button
+                onClick={() => { setFocusSelectionMode(false); setSelectedDocIds(new Set()) }}
+                className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {docItems.map((item, idx) => {
           if (item.type === "band") {
             return (
@@ -1385,7 +1435,7 @@ export function DocumentBrowser({
           const isHovered = hoveredDocId === doc.id
           const isMenuOpen = menuOpenDocId === doc.id
           const showActions = isHovered || isMenuOpen
-          const showCheckbox = selectedDocIds.size > 0 || isHovered || isDocChecked
+          const showCheckbox = focusSelectionMode || selectedDocIds.size > 0 || isHovered || isDocChecked
           const statusInfo = getStatusInfo(doc.status)
           const tagsText =
             doc.tags && doc.tags.length > 0
@@ -1616,10 +1666,9 @@ export function DocumentBrowser({
                             onClick={() => toggleDocTag(doc.id, tag)}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                           >
-                            <Checkbox
-                              checked={doc.tags?.includes(tag) ?? false}
-                              className="h-4 w-4 pointer-events-none rounded-[2px]"
-                            />
+                            <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", doc.tags?.includes(tag) ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                              {doc.tags?.includes(tag) && <Check className="h-2.5 w-2.5" />}
+                            </span>
                             <span className="text-xs text-muted-foreground truncate">{tag}</span>
                           </button>
                         ))
