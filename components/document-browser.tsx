@@ -375,6 +375,15 @@ export function DocumentBrowser({
       case "precision":
       case "recall":
         return doc.errorRate != null ? `${Math.max(0, Math.round(100 - doc.errorRate))}%` : null
+      case "correct-values":
+      case "annotated-values":
+        return `${Math.round(getFieldHash(field, doc.id) * 3.5)}`
+      case "correct-missing":
+      case "annotated-as-missing":
+        return `${Math.round(getFieldHash(field, doc.id) * 0.8)}`
+      case "total-annotations":
+      case "total-predictions":
+        return `${Math.round(getFieldHash(field, doc.id) * 4.2)}`
       default:
         return null
     }
@@ -397,6 +406,15 @@ export function DocumentBrowser({
       case "precision":
       case "recall":
         return doc.errorRate != null ? Math.max(0, Math.round(100 - doc.errorRate)) : null
+      case "correct-values":
+      case "annotated-values":
+        return Math.round(getFieldHash(field, doc.id) * 3.5)
+      case "correct-missing":
+      case "annotated-as-missing":
+        return Math.round(getFieldHash(field, doc.id) * 0.8)
+      case "total-annotations":
+      case "total-predictions":
+        return Math.round(getFieldHash(field, doc.id) * 4.2)
       default:
         return null
     }
@@ -609,7 +627,10 @@ export function DocumentBrowser({
             <Popover open={sortOpen} onOpenChange={setSortOpen}>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className={cn("h-7 w-7 relative", isSortActive && "text-primary")}>
-                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  {isSortActive
+                    ? <ArrowDown className={cn("h-3.5 w-3.5 transition-transform", sortDirection === "asc" && "rotate-180")} />
+                    : <ArrowUpDown className="h-3.5 w-3.5" />
+                  }
                   {isSortActive && (
                     <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
                       1
@@ -722,10 +743,16 @@ export function DocumentBrowser({
                 <div className="mx-3 my-1 border-t border-border" />
 
                 {/* Direction */}
-                {[
-                  { value: "asc" as const, label: "Oldest on top" },
-                  { value: "desc" as const, label: "Newest on top" },
-                ].filter((d) => !sortSearch || d.label.toLowerCase().includes(sortSearch.toLowerCase()))
+                {(() => {
+                  const isNameSort = sortField === "name"
+                  const isDateSort = sortField === "" || sortField === "uploaded-date"
+                  const dirs: { value: "asc" | "desc"; label: string }[] = isNameSort
+                    ? [{ value: "asc", label: "A to Z" }, { value: "desc", label: "Z to A" }]
+                    : isDateSort
+                    ? [{ value: "asc", label: "Oldest first" }, { value: "desc", label: "Newest first" }]
+                    : [{ value: "desc", label: "High to low" }, { value: "asc", label: "Low to high" }]
+                  return dirs
+                })().filter((d) => !sortSearch || d.label.toLowerCase().includes(sortSearch.toLowerCase()))
                   .map((d) => {
                     const isDirActive = (sortDirection === d.value && sortField !== "") || (sortField === "" && d.value === "desc")
                     return (
@@ -1029,11 +1056,12 @@ export function DocumentBrowser({
               />
 
               {/* Chip */}
-              <div className="flex items-center gap-2 bg-[#cfd8dd] rounded-full px-3 py-[2px]">
+              <div className="flex items-center gap-1.5 bg-[#cfd8dd] rounded-full px-3 py-[2px] min-w-0 overflow-hidden">
                 {/* Sort field label */}
                 <button
                   onClick={() => setSortOpen(true)}
-                  className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 whitespace-nowrap hover:text-[#0067df] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
+                  className="text-[12px] font-semibold text-[#273139] underline decoration-solid leading-4 truncate max-w-[90px] hover:text-[#0067df] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:rounded-sm"
+                  title={SORT_FIELD_LABELS[sortField] ?? sortField}
                 >
                   {SORT_FIELD_LABELS[sortField] ?? sortField}
                 </button>
@@ -1473,10 +1501,6 @@ export function DocumentBrowser({
           const showActions = isHovered || isMenuOpen
           const showCheckbox = focusSelectionMode || selectedDocIds.size > 0 || isHovered || isDocChecked
           const statusInfo = getStatusInfo(doc.status)
-          const tagsText =
-            doc.tags && doc.tags.length > 0
-              ? doc.tags.slice(0, 2).join(", ") + (doc.tags.length > 2 ? `, +${doc.tags.length - 2} more` : "")
-              : null
           const sortVal = sortField ? getSortValue(doc, sortField) : null
           const deltaActive = deltaEnabled && !!deltaVersionId && isMetricSort(sortField)
           const deltaNum = (() => {
@@ -1498,7 +1522,7 @@ export function DocumentBrowser({
           return (
             <div
               key={doc.id}
-              className="relative group"
+              className="group"
               onMouseEnter={() => setHoveredDocId(doc.id)}
               onMouseLeave={() => { if (!isMenuOpen) setHoveredDocId(null) }}
             >
@@ -1509,13 +1533,13 @@ export function DocumentBrowser({
                 onClick={() => onDocumentSelect(doc.id)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDocumentSelect(doc.id) } }}
                 className={cn(
-                  "w-full text-left pl-4 pr-8 py-2.5 border-b border-border/50 border-l-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
+                  "w-full text-left pl-3 pr-2 py-2 border-b border-border/50 border-l-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0067df] focus-visible:ring-inset",
                   isSelected
                     ? "border-l-[#0067df] bg-[#e9f1fa] hover:bg-[#dde8f5]"
                     : "border-l-transparent hover:bg-accent",
                 )}
               >
-                {/* Row 1: icon→checkbox + name + status */}
+                {/* Row 1: icon→checkbox + name + three-dot menu */}
                 <div className="flex items-center gap-1.5">
 
                   {/* Icon ↔ Checkbox transition */}
@@ -1580,164 +1604,164 @@ export function DocumentBrowser({
                     </TooltipContent>
                   </Tooltip>
 
+                  {/* Three-dot menu — inline, visible on hover */}
+                  <div
+                    className={cn(
+                      "flex-shrink-0 transition-opacity",
+                      showActions || tagEditorDocId === doc.id
+                        ? "opacity-100 pointer-events-auto"
+                        : "opacity-0 pointer-events-none",
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Popover
+                      open={tagEditorDocId === doc.id}
+                      onOpenChange={(open) => {
+                        setTagEditorDocId(open ? doc.id : null)
+                        if (!open) { setTagEditorSearch(""); setNewTagInput("") }
+                      }}
+                    >
+                      <PopoverAnchor asChild>
+                        <DropdownMenu
+                          open={isMenuOpen}
+                          onOpenChange={(open) => {
+                            setMenuOpenDocId(open ? doc.id : null)
+                            if (!open) setHoveredDocId(null)
+                          }}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-[3px] hover:bg-[#526069]/10">
+                              <MoreHorizontal className="h-3 w-3 text-[#526069]" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs">
+                              <Download className="h-3.5 w-3.5 mr-2" />
+                              Download
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setTagEditorDocId(doc.id)}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Tag className="h-3.5 w-3.5 mr-2" />
+                              Edit tags
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => onResetDocument?.(doc.id)} className="cursor-pointer text-xs">
+                              <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                              Reset extractions
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs text-destructive focus:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </PopoverAnchor>
+
+                      <PopoverContent
+                        side="right"
+                        align="center"
+                        sideOffset={8}
+                        className="w-[260px] p-0"
+                      >
+                        {/* Header */}
+                        <div className="px-3 py-2.5 flex items-center border-b border-border">
+                          <span className="text-xs font-semibold">Tags</span>
+                        </div>
+                        {/* Search */}
+                        <div className="px-3 pb-2">
+                          <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
+                            <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                            <input
+                              value={tagEditorSearch}
+                              onChange={(e) => setTagEditorSearch(e.target.value)}
+                              placeholder="Search tags…"
+                              className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        {/* Existing tags */}
+                        <div className="max-h-[200px] overflow-y-auto">
+                          {allTags
+                            .filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase()))
+                            .map((tag) => (
+                              <button
+                                key={tag}
+                                onClick={() => toggleDocTag(doc.id, tag)}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                              >
+                                <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", doc.tags?.includes(tag) ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                                  {doc.tags?.includes(tag) && <Check className="h-2.5 w-2.5" />}
+                                </span>
+                                <span className="text-xs text-muted-foreground truncate">{tag}</span>
+                              </button>
+                            ))
+                          }
+                          {allTags.filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase())).length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground">
+                              {tagEditorSearch ? `No tags match "${tagEditorSearch}"` : "No tags yet"}
+                            </p>
+                          )}
+                        </div>
+                        {/* New tag input */}
+                        <div className="border-t border-border px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 flex items-center border border-input rounded-md h-8 px-3 bg-background">
+                              <input
+                                value={newTagInput}
+                                onChange={(e) => setNewTagInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNewTag(doc.id, newTagInput) } }}
+                                placeholder="New tag…"
+                                className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
+                              />
+                            </div>
+                            <button
+                              onClick={() => commitNewTag(doc.id, newTagInput)}
+                              disabled={!newTagInput.trim()}
+                              className="h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {/* Row 2: status + metric value (sort metric when active, else error rate as default) */}
+                <div className="mt-1 pl-[26px] flex items-center gap-2">
                   <span className={cn("flex-shrink-0 text-[10px] px-1.5 py-0.5 font-semibold whitespace-nowrap", statusInfo.badgeClassName)}>
                     {statusInfo.label}
                   </span>
-                </div>
-
-                {/* Row 2: tags / pages + sort value */}
-                <div className="mt-1 pl-[26px] flex items-center gap-2">
-                  <div className="flex-1 min-w-0 overflow-hidden">
-                    {tagsText ? (
-                      <span className="text-[11px] text-[#526069] truncate block">{tagsText}</span>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground">{doc.pages} {doc.pages === 1 ? "page" : "pages"}</span>
-                    )}
-                  </div>
-                  {sortVal != null && (
-                    <div className="flex-shrink-0 flex items-center gap-1">
-                      <span className="text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums">{sortVal}</span>
-                      {deltaNum != null && (
-                        <span className={cn(
-                          "text-[10px] font-semibold tabular-nums leading-4",
-                          deltaNum === 0
-                            ? "text-[#526069]"
-                            : deltaGood ? "text-[#038108]" : "text-[#b45309]",
-                        )}>
-                          {deltaNum > 0 ? "▲" : deltaNum < 0 ? "▼" : "–"}
-                          {deltaNum !== 0 ? Math.abs(deltaNum) : ""}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Three-dot menu + tag editor (anchored here, triggered from menu item) */}
-              <div
-                className={cn(
-                  "absolute right-2 top-1/2 -translate-y-1/2 z-20 transition-opacity",
-                  showActions || tagEditorDocId === doc.id
-                    ? "opacity-100 pointer-events-auto"
-                    : "opacity-0 pointer-events-none",
-                )}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Popover
-                  open={tagEditorDocId === doc.id}
-                  onOpenChange={(open) => {
-                    setTagEditorDocId(open ? doc.id : null)
-                    if (!open) { setTagEditorSearch(""); setNewTagInput("") }
-                  }}
-                >
-                  <PopoverAnchor asChild>
-                    <DropdownMenu
-                      open={isMenuOpen}
-                      onOpenChange={(open) => {
-                        setMenuOpenDocId(open ? doc.id : null)
-                        if (!open) setHoveredDocId(null)
-                      }}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-5 w-5 rounded-[3px] hover:bg-[#526069]/10">
-                          <MoreHorizontal className="h-3 w-3 text-[#526069]" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs">
-                          <Download className="h-3.5 w-3.5 mr-2" />
-                          Download
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => setTagEditorDocId(doc.id)}
-                          className="cursor-pointer text-xs"
-                        >
-                          <Tag className="h-3.5 w-3.5 mr-2" />
-                          Edit tags
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onResetDocument?.(doc.id)} className="cursor-pointer text-xs">
-                          <RotateCcw className="h-3.5 w-3.5 mr-2" />
-                          Reset extractions
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {}} className="cursor-pointer text-xs text-destructive focus:text-destructive">
-                          <Trash2 className="h-3.5 w-3.5 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </PopoverAnchor>
-
-                  <PopoverContent
-                    side="right"
-                    align="center"
-                    sideOffset={8}
-                    className="w-[260px] p-0"
-                  >
-                    {/* Header */}
-                    <div className="px-3 py-2.5 flex items-center border-b border-border">
-                      <span className="text-xs font-semibold">Tags</span>
-                    </div>
-                    {/* Search */}
-                    <div className="px-3 pb-2">
-                      <div className="flex items-center border border-input rounded-md h-8 px-3 gap-2 bg-background">
-                        <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <input
-                          value={tagEditorSearch}
-                          onChange={(e) => setTagEditorSearch(e.target.value)}
-                          placeholder="Search tags…"
-                          className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
-                          autoFocus
-                        />
+                  {(() => {
+                    const activeMetric = isMetricSort(sortField)
+                    const metricValue = activeMetric ? sortVal : (doc.errorRate != null ? `${doc.errorRate}%` : null)
+                    const metricLabel = activeMetric ? (SORT_FIELD_LABELS[sortField] ?? sortField) : "Error rate"
+                    if (!metricValue) return null
+                    return (
+                      <div className="ml-auto flex-shrink-0 flex items-center gap-1">
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <span className="text-[12px] font-semibold text-[#0067df] leading-4 tabular-nums cursor-default">{metricValue}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="text-xs">{metricLabel}</TooltipContent>
+                        </Tooltip>
+                        {activeMetric && deltaNum != null && (
+                          <span className={cn(
+                            "text-[10px] font-semibold tabular-nums leading-4",
+                            deltaNum === 0 ? "text-[#526069]" : deltaGood ? "text-[#038108]" : "text-[#b45309]",
+                          )}>
+                            {deltaNum > 0 ? "▲" : deltaNum < 0 ? "▼" : "–"}{deltaNum !== 0 ? Math.abs(deltaNum) : ""}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                    {/* Existing tags */}
-                    <div className="max-h-[200px] overflow-y-auto">
-                      {allTags
-                        .filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase()))
-                        .map((tag) => (
-                          <button
-                            key={tag}
-                            onClick={() => toggleDocTag(doc.id, tag)}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                          >
-                            <span className={cn("h-4 w-4 flex-shrink-0 rounded-[4px] border flex items-center justify-center pointer-events-none", doc.tags?.includes(tag) ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
-                              {doc.tags?.includes(tag) && <Check className="h-2.5 w-2.5" />}
-                            </span>
-                            <span className="text-xs text-muted-foreground truncate">{tag}</span>
-                          </button>
-                        ))
-                      }
-                      {allTags.filter((t) => !tagEditorSearch || t.toLowerCase().includes(tagEditorSearch.toLowerCase())).length === 0 && (
-                        <p className="px-3 py-3 text-xs text-muted-foreground">
-                          {tagEditorSearch ? `No tags match "${tagEditorSearch}"` : "No tags yet"}
-                        </p>
-                      )}
-                    </div>
-                    {/* New tag input */}
-                    <div className="border-t border-border px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 flex items-center border border-input rounded-md h-8 px-3 bg-background">
-                          <input
-                            value={newTagInput}
-                            onChange={(e) => setNewTagInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitNewTag(doc.id, newTagInput) } }}
-                            placeholder="New tag…"
-                            className="flex-1 text-xs text-foreground placeholder:text-muted-foreground bg-transparent outline-none min-w-0"
-                          />
-                        </div>
-                        <button
-                          onClick={() => commitNewTag(doc.id, newTagInput)}
-                          disabled={!newTagInput.trim()}
-                          className="h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                    )
+                  })()}
+                </div>
               </div>
             </div>
           )
