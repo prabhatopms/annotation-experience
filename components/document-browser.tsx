@@ -40,7 +40,7 @@ import {
   Crosshair,
   Check,
 } from "lucide-react"
-import React, { useState, useMemo, useCallback, useRef } from "react"
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import type { Document, ExtractedField } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import {
@@ -199,11 +199,26 @@ export function DocumentBrowser({
   const [focusSelectionMode, setFocusSelectionMode] = useState(false)
 
   // Group by bands when sort is active
-  const [groupByEnabled, setGroupByEnabled] = useState(true)
+  const [groupByEnabled, setGroupByEnabled] = useState(false)
 
   // Delta comparison
   const [deltaEnabled, setDeltaEnabled] = useState(false)
   const [deltaVersionId, setDeltaVersionId] = useState("")
+  const defaultVersionId = (versions ?? MOCK_VERSIONS)[0]?.id ?? ""
+
+  // Auto-enable delta with default version when a metric sort is selected; reset otherwise
+  useEffect(() => {
+    if (isMetricSort(sortField)) {
+      setDeltaEnabled(true)
+      setDeltaVersionId(defaultVersionId)
+      onDeltaVersionChange?.(defaultVersionId || null)
+    } else {
+      setDeltaEnabled(false)
+      setDeltaVersionId("")
+      onDeltaVersionChange?.(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortField])
 
   const allTags = useMemo(() => {
     const tags = new Set<string>()
@@ -256,7 +271,9 @@ export function DocumentBrowser({
 
   const filteredDocuments = useMemo(() => {
     const filtered = documents.filter(filterDocument)
-    if (!sortField) return filtered
+    if (!sortField) return [...filtered].sort((a, b) =>
+      new Date(b.lastEdited ?? 0).getTime() - new Date(a.lastEdited ?? 0).getTime()
+    )
 
     return [...filtered].sort((a, b) => {
       let cmp = 0
@@ -407,7 +424,7 @@ export function DocumentBrowser({
 
   // Metric sort fields support individual field scoping; non-metric ones don't
   const isMetricSort = (field: string) =>
-    !["name", "status", "uploaded-date"].includes(field)
+    field !== "" && !["name", "status", "uploaded-date"].includes(field)
 
   // Derive field groups from extractedFields (unique groups, fields sorted by group order)
   const fieldGroups = useMemo(() => {
@@ -632,17 +649,21 @@ export function DocumentBrowser({
                     { value: "total-error", label: "Total error" },
                   ].filter((f) => !sortSearch || f.label.toLowerCase().includes(sortSearch.toLowerCase()))
 
-                  return fields.map((f) => (
-                    <button
-                      key={f.value}
-                      onClick={() => { setSortField(f.value as typeof sortField); setSortSearch(""); setSortScope("all-fields") }}
-                      className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", sortField === f.value && "bg-primary/5")}
-                    >
-                      <span className={cn("text-xs text-muted-foreground", sortField === f.value && "font-medium text-foreground")}>
-                        {f.label}
-                      </span>
-                    </button>
-                  ))
+                  return fields.map((f) => {
+                    const isDefault = sortField === "" && f.value === "uploaded-date"
+                    const isActive = sortField === f.value || isDefault
+                    return (
+                      <button
+                        key={f.value}
+                        onClick={() => { setSortField(f.value as typeof sortField); setSortSearch(""); setSortScope("all-fields") }}
+                        className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", isActive && "bg-primary/5")}
+                      >
+                        <span className={cn("text-xs text-muted-foreground", isActive && "font-medium text-foreground")}>
+                          {f.label}
+                        </span>
+                      </button>
+                    )
+                  })
                 })()}
 
                 {/* More metrics — flyout when no search; inline matches when searching */}
@@ -705,25 +726,27 @@ export function DocumentBrowser({
                   { value: "asc" as const, label: "Oldest on top" },
                   { value: "desc" as const, label: "Newest on top" },
                 ].filter((d) => !sortSearch || d.label.toLowerCase().includes(sortSearch.toLowerCase()))
-                  .map((d) => (
+                  .map((d) => {
+                    const isDirActive = (sortDirection === d.value && sortField !== "") || (sortField === "" && d.value === "desc")
+                    return (
                     <button
                       key={d.value}
                       onClick={() => { setSortDirection(d.value); setSortSearch("") }}
-                      className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", sortDirection === d.value && sortField && "bg-primary/5")}
+                      className={cn("w-full flex items-center px-3 py-2 hover:bg-muted/50 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", isDirActive && "bg-primary/5")}
                     >
                       <span className={cn(
                         "text-xs text-muted-foreground",
-                        sortDirection === d.value && sortField && "font-medium text-foreground",
+                        isDirActive && "font-medium text-foreground",
                       )}>
                         {d.label}
                       </span>
                     </button>
-                  ))}
+                  )})}
 
                 {/* Group by toggle */}
                 <div className="mx-3 my-1 border-t border-border" />
                 <div className="px-3 py-2 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Group by</span>
+                  <span className="text-xs text-muted-foreground">Group by sort criteria</span>
                   <Switch checked={groupByEnabled} onCheckedChange={setGroupByEnabled} />
                 </div>
 
@@ -738,7 +761,13 @@ export function DocumentBrowser({
                           checked={deltaEnabled}
                           onCheckedChange={(checked) => {
                             setDeltaEnabled(checked)
-                            if (!checked) { setDeltaVersionId(""); onDeltaVersionChange?.(null) }
+                            if (checked) {
+                              setDeltaVersionId(defaultVersionId)
+                              onDeltaVersionChange?.(defaultVersionId || null)
+                            } else {
+                              setDeltaVersionId("")
+                              onDeltaVersionChange?.(null)
+                            }
                           }}
                         />
                       </div>
@@ -751,7 +780,6 @@ export function DocumentBrowser({
                           }}
                           className="mt-1 w-full h-8 text-xs text-foreground bg-muted border border-input rounded-md px-2 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                         >
-                          <option value="">Select version…</option>
                           {(versions ?? MOCK_VERSIONS).map((v) => (
                             <option key={v.id} value={v.id}>{v.label}</option>
                           ))}
@@ -786,8 +814,16 @@ export function DocumentBrowser({
                 className="w-[240px] p-0"
               >
                 {/* Level-1 header */}
-                <div className="px-3 py-2.5 flex items-center border-b border-border">
+                <div className="px-3 py-2.5 flex items-center justify-between border-b border-border">
                   <span className="text-xs font-semibold">Filter by</span>
+                  {activeFilterCount > 0 && (
+                    <button
+                      onClick={clearAllFilters}
+                      className="text-[10px] text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none"
+                    >
+                      Clear all
+                    </button>
+                  )}
                 </div>
 
                 {/* ── Status row → flyout ── */}
@@ -978,7 +1014,7 @@ export function DocumentBrowser({
       </div>
 
       {/* ── Active chips bar (sort + filters + delta + focus) ── */}
-      {(isSortActive || activeFilterCount > 0 || (deltaEnabled && deltaVersionId) || focusedDocIds.size > 0) && (
+      {(isSortActive || activeFilterCount > 0 || (deltaEnabled && deltaVersionId && deltaVersionId !== defaultVersionId) || focusedDocIds.size > 0) && (
         <div className="px-3 py-3 border-b border-[#cfd8dd] flex flex-col gap-2">
 
           {/* Sort chip row */}
@@ -1149,7 +1185,7 @@ export function DocumentBrowser({
           )}
 
           {/* Delta comparison chip row — icon outside, chip inside, same pattern as sort/filter */}
-          {deltaEnabled && deltaVersionId && isMetricSort(sortField) && (
+          {deltaEnabled && deltaVersionId && isMetricSort(sortField) && deltaVersionId !== defaultVersionId && (
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-[#526069] flex-shrink-0 w-4 text-center leading-4">Δ</span>
               <div className="flex items-center gap-1.5 bg-[#cfd8dd] rounded-full px-3 py-[2px]">
